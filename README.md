@@ -26,7 +26,7 @@ El proyecto utiliza tecnologías de vanguardia para garantizar escalabilidad y r
     * Se analiza el estilo y se extrae la letra de una canción de referencia [cite: 53, 66].
     * Un **LLM** procesa la información para crear una nueva letra sincronizada [cite: 55, 70].
     * Un **ML Engine** procesa la letra junto con una pista de fondo para generar el resultado final [cite: 73, 76, 77].
-
+    La estructura es:![Texto alternativo](readme_rss/a.png)
 ##  Alcance del MVP (Producto Mínimo Viable)
 
 * **Funcionalidad prioritaria:** Finalización de la creación de canciones basadas en PDF [cite: 44].
