@@ -1,213 +1,307 @@
 import flet as ft
-import threading
-import requests
+import httpx
+import os
+
+# ─────────────────────────────────────────────
+# Configura aquí la URL de tu backend FastAPI
+# ─────────────────────────────────────────────
+BACKEND_URL = "http://localhost:8000/pipeline"
 
 
 def option_one_view(page: ft.Page):
 
-    # =========================
-    # VARIABLES
-    # =========================
+    # ── Estado ──────────────────────────────────
+    estado = {
+        "pdf_path": None,
+        "mp3_path": None,
+    }
 
-    pdf_path = {"value": None}
-    song_path = {"value": None}
+    # ── Textos de estado ────────────────────────
+    texto_pdf = ft.Text(
+        "Sin archivo PDF",
+        size=13,
+        color=ft.Colors.GREY_500,
+        italic=True,
+    )
+    texto_mp3 = ft.Text(
+        "Sin archivo MP3",
+        size=13,
+        color=ft.Colors.GREY_500,
+        italic=True,
+    )
 
-    texto_pdf = ft.Text("Ningún PDF seleccionado")
-    texto_song = ft.Text("Ninguna canción seleccionada")
+    # ── Resultado ────────────────────────────────
+    resultado_txt = ft.TextField(
+        label="URL del resultado",
+        read_only=True,
+        multiline=True,
+        min_lines=3,
+        max_lines=6,
+        expand=True,
+        visible=False,
+        border_color=ft.Colors.GREEN_400,
+        focused_border_color=ft.Colors.GREEN_600,
+        label_style=ft.TextStyle(color=ft.Colors.GREEN_400),
+    )
 
-    audio_resultado = ft.Audio()
-    page.overlay.append(audio_resultado)
+    # ── Indicador de carga ───────────────────────
+    loading_row = ft.Row(
+        controls=[
+            ft.ProgressRing(width=20, height=20, stroke_width=2),
+            ft.Text("Procesando… esto puede tardar unos minutos.", size=13),
+        ],
+        visible=False,
+    )
 
-    # =========================
-    # IDIOMA SELECTOR
-    # =========================
+    # ── Mensaje de error ─────────────────────────
+    error_txt = ft.Text(
+        "",
+        color=ft.Colors.RED_400,
+        size=13,
+        visible=False,
+    )
 
-    idioma = ft.Dropdown(
-        label="Idioma de salida",
+    # ── FilePicker ───────────────────────────────
+    file_picker = ft.FilePicker()
+    page.overlay.append(file_picker)
+    modo = {"tipo": 1}
+
+    def on_file_result(e: ft.FilePickerResultEvent):
+        if e.files:
+            file = e.files[0]
+            path = file.path
+
+            if modo["tipo"] == 1:
+                estado["pdf_path"] = path
+                texto_pdf.value = f"📄 {file.name}"
+                texto_pdf.color = ft.Colors.BLUE_300
+                texto_pdf.italic = False
+            else:
+                estado["mp3_path"] = path
+                texto_mp3.value = f"🎵 {file.name}"
+                texto_mp3.color = ft.Colors.PURPLE_300
+                texto_mp3.italic = False
+
+            page.update()
+
+    file_picker.on_result = on_file_result
+
+    # ── Dropdown de idioma ───────────────────────
+    dropdown = ft.Dropdown(
+        label="Idioma de la canción generada",
         value="es",
         options=[
-            ft.dropdown.Option("es"),
-            ft.dropdown.Option("en"),
-            ft.dropdown.Option("fr"),
-            ft.dropdown.Option("de")
-        ]
+            ft.dropdown.Option("es", "Español"),
+            ft.dropdown.Option("en", "English"),
+            ft.dropdown.Option("zh", "中文 (Chino)"),
+            ft.dropdown.Option("hi", "हिन्दी (Hindi)"),
+        ],
+        width=280,
+        border_color=ft.Colors.BLUE_GREY_400,
     )
 
-    # =========================
-    # MENÚ
-    # =========================
-
-    btn_play = ft.ElevatedButton(
-        "Inicio",
-        on_click=lambda e: page.go("/")
-    )
-
-    btn_create = ft.ElevatedButton(
-        "Crear",
-        on_click=lambda e: page.go("/add")
-    )
-
-    btn_config = ft.ElevatedButton(
-        "Config",
-        on_click=lambda e: page.go("/config")
-    )
-
-    # =========================
-    # PDF PICKER
-    # =========================
-
-    def seleccionar_pdf(e: ft.FilePickerResultEvent):
-        if e.files:
-            archivo = e.files[0]
-            pdf_path["value"] = archivo.path
-            texto_pdf.value = f"PDF:\n{archivo.name}"
-            page.update()
-
-    pdf_picker = ft.FilePicker(on_result=seleccionar_pdf)
-
-    # =========================
-    # SONG PICKER
-    # =========================
-
-    def seleccionar_song(e: ft.FilePickerResultEvent):
-        if e.files:
-            archivo = e.files[0]
-            song_path["value"] = archivo.path
-            texto_song.value = f"Canción:\n{archivo.name}"
-            page.update()
-
-    song_picker = ft.FilePicker(on_result=seleccionar_song)
-
-    page.overlay.append(pdf_picker)
-    page.overlay.append(song_picker)
-
-    # =========================
-    # BOTONES UPLOAD
-    # =========================
-
+    # ── Botones de carga ─────────────────────────
     btn_pdf = ft.ElevatedButton(
-        "Subir PDF",
-        on_click=lambda _: pdf_picker.pick_files(
-            allowed_extensions=["pdf"]
-        )
+        "Cargar PDF",
+        icon=ft.Icons.PICTURE_AS_PDF,
+        style=ft.ButtonStyle(
+            bgcolor=ft.Colors.BLUE_700,
+            color=ft.Colors.WHITE,
+            shape=ft.RoundedRectangleBorder(radius=8),
+        ),
+        on_click=lambda e: (
+            modo.update({"tipo": 1}),
+            file_picker.pick_files(
+                allow_multiple=False,
+                allowed_extensions=["pdf"],
+            ),
+        ),
     )
 
-    btn_song = ft.ElevatedButton(
-        "Subir canción",
-        on_click=lambda _: song_picker.pick_files(
-            allowed_extensions=["mp3", "wav"]
-        )
+    btn_mp3 = ft.ElevatedButton(
+        "Cargar MP3",
+        icon=ft.Icons.MUSIC_NOTE,
+        style=ft.ButtonStyle(
+            bgcolor=ft.Colors.PURPLE_700,
+            color=ft.Colors.WHITE,
+            shape=ft.RoundedRectangleBorder(radius=8),
+        ),
+        on_click=lambda e: (
+            modo.update({"tipo": 2}),
+            file_picker.pick_files(
+                allow_multiple=False,
+                allowed_extensions=["mp3"],
+            ),
+        ),
     )
 
-    # =========================
-    # PIPELINE BUTTON
-    # =========================
+    # ── Botón procesar ───────────────────────────
+    btn_procesar = ft.ElevatedButton(
+        "Procesar archivos",
+        icon=ft.Icons.PLAY_ARROW_ROUNDED,
+        style=ft.ButtonStyle(
+            bgcolor=ft.Colors.GREEN_700,
+            color=ft.Colors.WHITE,
+            shape=ft.RoundedRectangleBorder(radius=8),
+            padding=ft.padding.symmetric(horizontal=24, vertical=12),
+        ),
+    )
 
-    def crear_cancion(e):
-
-        if not pdf_path["value"]:
-            texto_pdf.value = "Selecciona un PDF"
+    async def procesar_async(e):
+        if not estado["pdf_path"]:
+            error_txt.value = "⚠️ Selecciona un archivo PDF primero."
+            error_txt.visible = True
+            resultado_txt.visible = False
             page.update()
             return
 
-        if not song_path["value"]:
-            texto_song.value = "Selecciona una canción"
+        if not estado["mp3_path"]:
+            error_txt.value = "⚠️ Selecciona un archivo MP3 primero."
+            error_txt.visible = True
+            resultado_txt.visible = False
             page.update()
             return
 
-        texto_pdf.value = "Enviando PDF..."
-        texto_song.value = "Enviando canción..."
+        if not os.path.exists(estado["pdf_path"]):
+            error_txt.value = "⚠️ No se encontró el PDF en disco."
+            error_txt.visible = True
+            page.update()
+            return
+
+        if not os.path.exists(estado["mp3_path"]):
+            error_txt.value = "⚠️ No se encontró el MP3 en disco."
+            error_txt.visible = True
+            page.update()
+            return
+
+        error_txt.visible = False
+        resultado_txt.visible = False
+        loading_row.visible = True
+        btn_procesar.disabled = True
         page.update()
 
-        def task():
+        try:
+            idioma = dropdown.value or "es"
 
-            try:
-                with open(pdf_path["value"], "rb") as pdf_file, \
-                     open(song_path["value"], "rb") as song_file:
+            with open(estado["pdf_path"], "rb") as pdf_file, \
+                 open(estado["mp3_path"], "rb") as mp3_file:
 
-                    files = {
-                        "pdf": pdf_file,
-                        "song": song_file
-                    }
-
-                    data = {
-                        "idioma": idioma.value
-                    }
-
-                    response = requests.post(
-                        "http://127.0.0.1:8000/pipeline",
-                        files=files,
-                        data=data,
-                        timeout=600 
+                async with httpx.AsyncClient(timeout=600) as client:
+                    response = await client.post(
+                        BACKEND_URL,
+                        data={"idioma": idioma},
+                        files={
+                            "pdf": (
+                                os.path.basename(estado["pdf_path"]),
+                                pdf_file,
+                                "application/pdf",
+                            ),
+                            "song": (
+                                os.path.basename(estado["mp3_path"]),
+                                mp3_file,
+                                "audio/mpeg",
+                            ),
+                        },
                     )
 
-                result = response.json()
-                output_url = result["output_url"]
+            if response.status_code == 200:
+                data = response.json()
+                url = data.get("output_url", str(data))
+                resultado_txt.value = url
+                resultado_txt.visible = True
+                error_txt.visible = False
+            else:
+                error_txt.value = (
+                    f"❌ Error del servidor ({response.status_code}):\n"
+                    f"{response.text[:300]}"
+                )
+                error_txt.visible = True
 
-                def update_ui():
-                    texto_song.value = "¡Canción lista!"
-                    audio_resultado.src = output_url
-                    audio_resultado.autoplay = True
-                    page.update()
+        except httpx.ConnectError:
+            error_txt.value = (
+                f"❌ No se pudo conectar al backend en:\n{BACKEND_URL}\n"
+                "Verifica que FastAPI esté corriendo."
+            )
+            error_txt.visible = True
+        except Exception as ex:
+            error_txt.value = f"❌ Error inesperado: {ex}"
+            error_txt.visible = True
+        finally:
+            loading_row.visible = False
+            btn_procesar.disabled = False
+            page.update()
 
-                page.call_from_thread(update_ui)
+    btn_procesar.on_click = lambda e: page.run_task(procesar_async, e)
 
-            except Exception as ex:
+    # ── Botón copiar URL ──────────────────────────
+    def copiar_url(e):
+        if resultado_txt.value:
+            page.set_clipboard(resultado_txt.value)
+            page.open(
+                ft.SnackBar(content=ft.Text("✅ URL copiada al portapapeles"))
+            )
 
-                def error_ui():
-                    texto_song.value = f"Error: {str(ex)}"
-                    page.update()
-
-                page.call_from_thread(error_ui)
-
-        threading.Thread(target=task).start()
-
-    btn_create_song = ft.ElevatedButton(
-        "Crear canción",
-        on_click=crear_cancion
+    btn_copiar = ft.IconButton(
+        icon=ft.Icons.COPY,
+        tooltip="Copiar URL",
+        on_click=copiar_url,
     )
 
-    # =========================
-    # LAYOUT
-    # =========================
-
+    # ── Menú inferior ─────────────────────────────
     low_menu = ft.Row(
-        controls=[btn_play, btn_create, btn_config],
-        alignment=ft.MainAxisAlignment.CENTER
+        controls=[
+            ft.ElevatedButton("Inicio", on_click=lambda e: page.go("/")),
+            ft.ElevatedButton("Agregar", on_click=lambda e: page.go("/add")),
+            ft.ElevatedButton("Config", on_click=lambda e: page.go("/config")),
+        ],
+        alignment=ft.MainAxisAlignment.CENTER,
     )
 
+    # ── Layout principal ─────────────────────────
     high_menu = ft.Container(
-        expand=True,
-        alignment=ft.alignment.center,
         content=ft.Column(
-            alignment=ft.MainAxisAlignment.CENTER,
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=20,
             controls=[
+                ft.Text(
+                    "Generador de canciones educativas",
+                    size=22,
+                    weight=ft.FontWeight.BOLD,
+                ),
+                ft.Divider(height=1),
 
-                ft.Text("Crear una nueva canción", size=24),
+                ft.Text("1. Selecciona el idioma", weight=ft.FontWeight.W_600),
+                dropdown,
+                ft.Divider(height=8, color=ft.Colors.TRANSPARENT),
 
-                ft.Text("Sube un PDF", size=20),
-                btn_pdf,
-                texto_pdf,
+                ft.Text("2. Sube el contenido del PDF", weight=ft.FontWeight.W_600),
+                ft.Row([btn_pdf, texto_pdf], spacing=12, wrap=True),
+                ft.Divider(height=8, color=ft.Colors.TRANSPARENT),
 
-                ft.Text("Escoge melodía de fondo", size=20),
-                btn_song,
-                texto_song,
+                ft.Text("3. Sube la canción base (MP3)", weight=ft.FontWeight.W_600),
+                ft.Row([btn_mp3, texto_mp3], spacing=12, wrap=True),
+                ft.Divider(height=16, color=ft.Colors.TRANSPARENT),
 
-                ft.Text("Escoge idioma", size=20),
-                idioma,
+                btn_procesar,
+                loading_row,
+                error_txt,
 
-                btn_create_song,
-                audio_resultado
-            ]
-        )
+                ft.Divider(height=8, color=ft.Colors.TRANSPARENT),
+                ft.Row(
+                    [
+                        ft.Text("Resultado:", weight=ft.FontWeight.W_600),
+                        btn_copiar,
+                    ],
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                ),
+                resultado_txt,
+            ],
+            spacing=10,
+            scroll=ft.ScrollMode.AUTO,
+        ),
+        padding=ft.padding.all(24),
+        expand=True,
     )
 
     return ft.View(
         route="/option_one",
-        controls=[
-            high_menu,
-            low_menu
-        ]
+        controls=[high_menu, low_menu],
     )
