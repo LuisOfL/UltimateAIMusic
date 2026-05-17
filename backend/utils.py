@@ -8,6 +8,7 @@ import tempfile
 from botocore.exceptions import ClientError
 from TTS.api import TTS
 from pydub import AudioSegment
+from botocore.client import Config
 
 
 def extraer_nombre(path):
@@ -306,3 +307,22 @@ def subir_archivos(path1, path2):
     s3.upload_file(path2, bucket, s3_song_key)
     
     return [s3_pdf_key, s3_song_key]
+
+
+
+def genera_url(bucket,key):
+
+    s3 = boto3.client(
+        "s3",
+        region_name="us-east-2",
+        config=Config(signature_version="s3v4")
+    )
+    url = s3.generate_presigned_url(
+        "get_object",
+        Params={
+            "Bucket": bucket,
+            "Key": key
+        },
+        ExpiresIn=3600  # 1 hora
+    )
+    return url

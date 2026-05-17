@@ -5,6 +5,7 @@ from utils import llamar_qwen
 from utils import generar_y_mezclar_tts_s3
 from utils import extraer_nombre
 from utils import subir_archivos
+from utils import genera_url
 
 
 def pipeline(bucket_name, idioma, pdf_local, song_local):
@@ -38,5 +39,5 @@ def pipeline(bucket_name, idioma, pdf_local, song_local):
         segmentos_whisper=res['segmentos'],
         language=idioma
     )
-
-    return ruta_final
+    url = genera_url(bucket_name,f"outputs/{song_name}.mp3")
+    return url
