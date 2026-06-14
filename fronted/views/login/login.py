@@ -4,17 +4,13 @@ import httpx
 
 """
 Vista de inicio de sesión / registro.
+Registro con confirmación automática (sin verificación por correo).
 
-Permite alternar entre dos modos:
-- Iniciar sesión: correo + contraseña
-- Registrarse: nombre de usuario, correo, fecha de nacimiento, país, estado, contraseña
-
-Conectada al backend FastAPI (login.py / main.py):
-- POST /login    -> {"email": ..., "password": ...}
-- POST /register -> {"email": ..., "password": ..., "username": ..., "birthdate": ..., "country": ..., "state": ...}
+Endpoints:
+  POST /login    {"email", "password"}
+  POST /register {"email","password","username","birthdate","country","state"}
 """
 
-# Cambia esta URL según donde esté corriendo tu backend FastAPI
 API_BASE_URL = "http://127.0.0.1:8000"
 
 
@@ -22,7 +18,46 @@ def login_view(page: ft.Page):
 
     state = {"is_login": True, "loading": False}
 
-    # ---------- Encabezado ----------
+    # ------------------------------------------------------------------ #
+    #  HELPERS                                                             #
+    # ------------------------------------------------------------------ #
+
+    def show_snack(message, error=False):
+        page.open(
+            ft.SnackBar(
+                content=ft.Text(message),
+                bgcolor="#DC2626" if error else "#059669",
+            )
+        )
+
+    def set_loading(is_loading: bool):
+        state["loading"]        = is_loading
+        submit_spinner.visible  = is_loading
+        submit_btn_text.visible = not is_loading
+        submit_btn.disabled     = is_loading
+        submit_btn.opacity      = 0.6 if is_loading else 1
+        page.update()
+
+    def styled_field(label, icon, password=False, hint=None):
+        return ft.TextField(
+            label=label,
+            hint_text=hint,
+            password=password,
+            can_reveal_password=password,
+            prefix_icon=icon,
+            label_style=ft.TextStyle(color=ft.Colors.with_opacity(0.5, ft.Colors.WHITE)),
+            color=ft.Colors.WHITE,
+            bgcolor=ft.Colors.with_opacity(0.06, ft.Colors.WHITE),
+            border_color=ft.Colors.with_opacity(0.15, ft.Colors.WHITE),
+            focused_border_color="#7C3AED",
+            border_radius=ft.border_radius.all(14),
+            text_size=14,
+        )
+
+    # ------------------------------------------------------------------ #
+    #  ENCABEZADO                                                          #
+    # ------------------------------------------------------------------ #
+
     back_btn = ft.Container(
         on_click=lambda e: page.go("/"),
         ink=True,
@@ -70,7 +105,10 @@ def login_view(page: ft.Page):
         text_align=ft.TextAlign.CENTER,
     )
 
-    # ---------- Selector de modo (tabs) ----------
+    # ------------------------------------------------------------------ #
+    #  TABS                                                                #
+    # ------------------------------------------------------------------ #
+
     tab_login = ft.Container(
         expand=True,
         padding=ft.padding.symmetric(vertical=10),
@@ -96,64 +134,44 @@ def login_view(page: ft.Page):
         content=ft.Row(controls=[tab_login, tab_register], spacing=4),
     )
 
-    # ---------- Campo de texto estilizado ----------
-    def styled_field(label, icon, password=False, hint=None):
-        return ft.TextField(
-            label=label,
-            hint_text=hint,
-            password=password,
-            can_reveal_password=password,
-            prefix_icon=icon,
-            label_style=ft.TextStyle(color=ft.Colors.with_opacity(0.5, ft.Colors.WHITE)),
-            color=ft.Colors.WHITE,
-            bgcolor=ft.Colors.with_opacity(0.06, ft.Colors.WHITE),
-            border_color=ft.Colors.with_opacity(0.15, ft.Colors.WHITE),
-            focused_border_color="#7C3AED",
-            border_radius=ft.border_radius.all(14),
-            text_size=14,
-        )
+    # ------------------------------------------------------------------ #
+    #  FORMULARIO LOGIN                                                    #
+    # ------------------------------------------------------------------ #
 
-    # ---------- Formulario: Iniciar sesión ----------
-    login_email_field = styled_field("Correo electrónico", ft.Icons.EMAIL_OUTLINED)
+    login_email_field    = styled_field("Correo electrónico", ft.Icons.EMAIL_OUTLINED)
     login_password_field = styled_field("Contraseña", ft.Icons.LOCK_OUTLINE_ROUNDED, password=True)
-
-    forgot_password = ft.Container(
-        alignment=ft.alignment.center_right,
-        content=ft.TextButton(
-            "¿Olvidaste tu contraseña?",
-            style=ft.ButtonStyle(color="#06B6D4"),
-            on_click=lambda e: show_snack("Función disponible próximamente"),
-        ),
-    )
 
     login_form = ft.Column(
         spacing=14,
         controls=[
             login_email_field,
             login_password_field,
-            forgot_password,
+            ft.Container(
+                alignment=ft.alignment.center_right,
+                content=ft.TextButton(
+                    "¿Olvidaste tu contraseña?",
+                    style=ft.ButtonStyle(color="#06B6D4"),
+                    on_click=lambda e: show_snack("Función disponible próximamente"),
+                ),
+            ),
         ],
     )
 
-    # ---------- Formulario: Registro ----------
+    # ------------------------------------------------------------------ #
+    #  FORMULARIO REGISTRO                                                 #
+    # ------------------------------------------------------------------ #
+
     register_username_field = styled_field("Nombre de usuario", ft.Icons.PERSON_OUTLINE_ROUNDED)
-    register_email_field = styled_field("Correo electrónico", ft.Icons.EMAIL_OUTLINED)
+    register_email_field    = styled_field("Correo electrónico", ft.Icons.EMAIL_OUTLINED)
 
-    # Selector de fecha de nacimiento
-    birthdate_field = styled_field(
-        "Fecha de nacimiento",
-        ft.Icons.CALENDAR_MONTH_ROUNDED,
-        hint="DD/MM/AAAA",
-    )
+    birthdate_field = styled_field("Fecha de nacimiento", ft.Icons.CALENDAR_MONTH_ROUNDED, hint="DD/MM/AAAA")
     birthdate_field.read_only = True
-
-    # Guardamos también la fecha en formato ISO (YYYY-MM-DD) para enviarla al backend/Cognito
     birthdate_iso = {"value": None}
 
     def on_date_change(e):
         if date_picker.value:
             birthdate_iso["value"] = date_picker.value.strftime("%Y-%m-%d")
-            birthdate_field.value = date_picker.value.strftime("%d/%m/%Y")
+            birthdate_field.value  = date_picker.value.strftime("%d/%m/%Y")
             page.update()
 
     date_picker = ft.DatePicker(
@@ -162,19 +180,13 @@ def login_view(page: ft.Page):
         on_change=on_date_change,
     )
     page.overlay.append(date_picker)
-
-    def open_date_picker(e):
-        date_picker.open = True
-        page.update()
-
-    birthdate_field.on_click = open_date_picker
+    birthdate_field.on_click = lambda e: (setattr(date_picker, "open", True), page.update())
 
     countries = [
-        "Argentina", "Bolivia", "Chile", "Colombia", "Costa Rica",
-        "Cuba", "Ecuador", "El Salvador", "España", "Estados Unidos",
-        "Guatemala", "Honduras", "México", "Nicaragua", "Panamá",
-        "Paraguay", "Perú", "Puerto Rico", "República Dominicana",
-        "Uruguay", "Venezuela", "Otro",
+        "Argentina","Bolivia","Chile","Colombia","Costa Rica","Cuba","Ecuador",
+        "El Salvador","España","Estados Unidos","Guatemala","Honduras","México",
+        "Nicaragua","Panamá","Paraguay","Perú","Puerto Rico","República Dominicana",
+        "Uruguay","Venezuela","Otro",
     ]
 
     country_dropdown = ft.Dropdown(
@@ -189,10 +201,19 @@ def login_view(page: ft.Page):
         border_radius=ft.border_radius.all(14),
     )
 
-    state_field = styled_field("Estado / Provincia", ft.Icons.LOCATION_ON_OUTLINED)
-
+    state_field             = styled_field("Estado / Provincia", ft.Icons.LOCATION_ON_OUTLINED)
     register_password_field = styled_field("Contraseña", ft.Icons.LOCK_OUTLINE_ROUNDED, password=True)
-    register_confirm_field = styled_field("Confirmar contraseña", ft.Icons.LOCK_OUTLINE_ROUNDED, password=True)
+    register_confirm_field  = styled_field("Confirmar contraseña", ft.Icons.LOCK_OUTLINE_ROUNDED, password=True)
+
+    # Info de requisitos de contraseña
+    password_hint = ft.Container(
+        padding=ft.padding.symmetric(horizontal=4),
+        content=ft.Text(
+            "Mín. 8 caracteres, una mayúscula, un número y un símbolo (ej: EduSong1!)",
+            size=11,
+            color=ft.Colors.with_opacity(0.4, ft.Colors.WHITE),
+        ),
+    )
 
     register_form = ft.Column(
         spacing=14,
@@ -204,141 +225,19 @@ def login_view(page: ft.Page):
             country_dropdown,
             state_field,
             register_password_field,
+            password_hint,
             register_confirm_field,
         ],
     )
 
-    # ---------- Botón principal ----------
+    # ------------------------------------------------------------------ #
+    #  BOTÓN PRINCIPAL                                                     #
+    # ------------------------------------------------------------------ #
+
     submit_btn_text = ft.Text("Iniciar sesión", color=ft.Colors.WHITE, weight=ft.FontWeight.W_700, size=14)
-    submit_spinner = ft.ProgressRing(width=18, height=18, stroke_width=2, color=ft.Colors.WHITE, visible=False)
-
-    # ---------- Snackbar ----------
-    def show_snack(message, error=False):
-        page.open(
-            ft.SnackBar(
-                content=ft.Text(message),
-                bgcolor="#DC2626" if error else "#059669",
-            )
-        )
-
-    def set_loading(is_loading: bool):
-        state["loading"] = is_loading
-        submit_spinner.visible = is_loading
-        submit_btn_text.visible = not is_loading
-        submit_btn.disabled = is_loading
-        submit_btn.opacity = 0.6 if is_loading else 1
-        page.update()
-
-    # ---------- Lógica de envío ----------
-    async def on_submit(e):
-        if state["loading"]:
-            return
-
-        if state["is_login"]:
-            email = (login_email_field.value or "").strip()
-            password = login_password_field.value or ""
-
-            if not email or not password:
-                show_snack("Completa correo y contraseña", error=True)
-                return
-
-            set_loading(True)
-            try:
-                async with httpx.AsyncClient(timeout=15) as client:
-                    resp = await client.post(
-                        f"{API_BASE_URL}/login",
-                        json={"email": email, "password": password},
-                    )
-
-                if resp.status_code == 200:
-                    data = resp.json()
-                    # Guardamos los tokens de Cognito para futuras peticiones
-                    try:
-                        page.client_storage.set("access_token", data.get("AccessToken", ""))
-                        page.client_storage.set("id_token", data.get("IdToken", ""))
-                        page.client_storage.set("refresh_token", data.get("RefreshToken", ""))
-                    except Exception:
-                        pass
-
-                    show_snack("Inicio de sesión exitoso")
-                    page.go("/")
-                else:
-                    detail = "Credenciales incorrectas"
-                    try:
-                        detail = resp.json().get("detail", detail)
-                    except Exception:
-                        pass
-                    show_snack(detail, error=True)
-
-            except httpx.RequestError:
-                show_snack("No se pudo conectar con el servidor", error=True)
-            finally:
-                set_loading(False)
-
-        else:
-            username = (register_username_field.value or "").strip()
-            email = (register_email_field.value or "").strip()
-            password = register_password_field.value or ""
-            confirm = register_confirm_field.value or ""
-            country = country_dropdown.value
-            state_value = (state_field.value or "").strip()
-
-            required = [
-                username,
-                email,
-                birthdate_iso["value"],
-                country,
-                state_value,
-                password,
-                confirm,
-            ]
-            if not all(required):
-                show_snack("Completa todos los campos", error=True)
-                return
-
-            if "@" not in email or "." not in email:
-                show_snack("Ingresa un correo válido", error=True)
-                return
-
-            if password != confirm:
-                show_snack("Las contraseñas no coinciden", error=True)
-                return
-
-            set_loading(True)
-            try:
-                async with httpx.AsyncClient(timeout=15) as client:
-                    resp = await client.post(
-                        f"{API_BASE_URL}/register",
-                        json={
-                            "email": email,
-                            "password": password,
-                            "username": username,
-                            "birthdate": birthdate_iso["value"],
-                            "country": country,
-                            "state": state_value,
-                        },
-                    )
-
-                if resp.status_code == 200:
-                    show_snack("Cuenta creada exitosamente, ahora inicia sesión")
-                    set_mode(True)
-                    login_email_field.value = email
-                    page.update()
-                else:
-                    detail = "No se pudo completar el registro"
-                    try:
-                        detail = resp.json().get("detail", detail)
-                    except Exception:
-                        pass
-                    show_snack(detail, error=True)
-
-            except httpx.RequestError:
-                show_snack("No se pudo conectar con el servidor", error=True)
-            finally:
-                set_loading(False)
+    submit_spinner  = ft.ProgressRing(width=18, height=18, stroke_width=2, color=ft.Colors.WHITE, visible=False)
 
     submit_btn = ft.Container(
-        on_click=on_submit,
         ink=True,
         border_radius=ft.border_radius.all(14),
         gradient=ft.LinearGradient(
@@ -360,16 +259,12 @@ def login_view(page: ft.Page):
         ),
     )
 
-    # ---------- Texto inferior para alternar modo ----------
-    switch_text = ft.Text(
-        "¿No tienes cuenta?",
-        size=12,
-        color=ft.Colors.with_opacity(0.5, ft.Colors.WHITE),
-    )
-    switch_link = ft.TextButton(
-        "Regístrate",
-        style=ft.ButtonStyle(color="#06B6D4"),
-    )
+    # ------------------------------------------------------------------ #
+    #  TEXTO INFERIOR                                                      #
+    # ------------------------------------------------------------------ #
+
+    switch_text = ft.Text("¿No tienes cuenta?", size=12, color=ft.Colors.with_opacity(0.5, ft.Colors.WHITE))
+    switch_link = ft.TextButton("Regístrate", style=ft.ButtonStyle(color="#06B6D4"))
 
     switch_row = ft.Row(
         alignment=ft.MainAxisAlignment.CENTER,
@@ -377,48 +272,150 @@ def login_view(page: ft.Page):
         controls=[switch_text, switch_link],
     )
 
-    # ---------- Lógica de cambio de modo ----------
-    def set_mode(is_login: bool):
-        state["is_login"] = is_login
+    # ------------------------------------------------------------------ #
+    #  LÓGICA DE SUBMIT                                                    #
+    # ------------------------------------------------------------------ #
 
-        login_form.visible = is_login
-        register_form.visible = not is_login
+    async def on_submit(e):
+        if state["loading"]:
+            return
+
+        # -- LOGIN --
+        if state["is_login"]:
+            email    = (login_email_field.value or "").strip()
+            password = login_password_field.value or ""
+
+            if not email or not password:
+                show_snack("Completa correo y contraseña", error=True)
+                return
+
+            set_loading(True)
+            try:
+                async with httpx.AsyncClient(timeout=15) as client:
+                    resp = await client.post(
+                        f"{API_BASE_URL}/login",
+                        json={"email": email, "password": password},
+                    )
+
+                if resp.status_code == 200:
+                    data = resp.json()
+                    try:
+                        page.client_storage.set("access_token",  data.get("AccessToken",  ""))
+                        page.client_storage.set("id_token",      data.get("IdToken",       ""))
+                        page.client_storage.set("refresh_token", data.get("RefreshToken",  ""))
+                    except Exception:
+                        pass
+                    show_snack("Inicio de sesión exitoso")
+                    page.go("/")
+                else:
+                    detail = "Correo o contraseña incorrectos"
+                    try:
+                        detail = resp.json().get("detail", detail)
+                    except Exception:
+                        pass
+                    show_snack(detail, error=True)
+
+            except httpx.RequestError:
+                show_snack("No se pudo conectar con el servidor", error=True)
+            finally:
+                set_loading(False)
+
+        # -- REGISTRO --
+        else:
+            username    = (register_username_field.value or "").strip()
+            email       = (register_email_field.value    or "").strip()
+            password    = register_password_field.value  or ""
+            confirm     = register_confirm_field.value   or ""
+            country     = country_dropdown.value
+            state_value = (state_field.value or "").strip()
+
+            if not all([username, email, birthdate_iso["value"], country, state_value, password, confirm]):
+                show_snack("Completa todos los campos", error=True)
+                return
+            if "@" not in email or "." not in email:
+                show_snack("Ingresa un correo válido", error=True)
+                return
+            if password != confirm:
+                show_snack("Las contraseñas no coinciden", error=True)
+                return
+
+            set_loading(True)
+            try:
+                async with httpx.AsyncClient(timeout=15) as client:
+                    resp = await client.post(
+                        f"{API_BASE_URL}/register",
+                        json={
+                            "email":     email,
+                            "password":  password,
+                            "username":  username,
+                            "birthdate": birthdate_iso["value"],
+                            "country":   country,
+                            "state":     state_value,
+                        },
+                    )
+
+                if resp.status_code == 200:
+                    show_snack("¡Cuenta creada! Ahora inicia sesión")
+                    set_mode(True)
+                    login_email_field.value = email
+                    page.update()
+                else:
+                    detail = "No se pudo completar el registro"
+                    try:
+                        detail = resp.json().get("detail", detail)
+                    except Exception:
+                        pass
+                    show_snack(detail, error=True)
+
+            except httpx.RequestError:
+                show_snack("No se pudo conectar con el servidor", error=True)
+            finally:
+                set_loading(False)
+
+    submit_btn.on_click = on_submit
+
+    # ------------------------------------------------------------------ #
+    #  CAMBIO DE MODO                                                      #
+    # ------------------------------------------------------------------ #
+
+    def set_mode(is_login: bool):
+        state["is_login"]      = is_login
+        login_form.visible     = is_login
+        register_form.visible  = not is_login
 
         if is_login:
-            tab_login.bgcolor = ft.Colors.with_opacity(0.15, "#7C3AED")
-            tab_login.content.color = "#06B6D4"
-            tab_register.bgcolor = ft.Colors.TRANSPARENT
+            tab_login.bgcolor          = ft.Colors.with_opacity(0.15, "#7C3AED")
+            tab_login.content.color    = "#06B6D4"
+            tab_register.bgcolor       = ft.Colors.TRANSPARENT
             tab_register.content.color = ft.Colors.with_opacity(0.5, ft.Colors.WHITE)
-
-            title_text.value = "Bienvenido de nuevo"
-            subtitle_text.value = "Inicia sesión para continuar"
-            submit_btn_text.value = "Iniciar sesión"
-
-            switch_text.value = "¿No tienes cuenta?"
-            switch_link.text = "Regístrate"
+            title_text.value           = "Bienvenido de nuevo"
+            subtitle_text.value        = "Inicia sesión para continuar"
+            submit_btn_text.value      = "Iniciar sesión"
+            switch_text.value          = "¿No tienes cuenta?"
+            switch_link.text           = "Regístrate"
         else:
-            tab_register.bgcolor = ft.Colors.with_opacity(0.15, "#7C3AED")
+            tab_register.bgcolor       = ft.Colors.with_opacity(0.15, "#7C3AED")
             tab_register.content.color = "#06B6D4"
-            tab_login.bgcolor = ft.Colors.TRANSPARENT
-            tab_login.content.color = ft.Colors.with_opacity(0.5, ft.Colors.WHITE)
-
-            title_text.value = "Crea tu cuenta"
-            subtitle_text.value = "Regístrate para empezar a crear canciones"
-            submit_btn_text.value = "Crear cuenta"
-
-            switch_text.value = "¿Ya tienes cuenta?"
-            switch_link.text = "Inicia sesión"
+            tab_login.bgcolor          = ft.Colors.TRANSPARENT
+            tab_login.content.color    = ft.Colors.with_opacity(0.5, ft.Colors.WHITE)
+            title_text.value           = "Crea tu cuenta"
+            subtitle_text.value        = "Regístrate para empezar a crear canciones"
+            submit_btn_text.value      = "Crear cuenta"
+            switch_text.value          = "¿Ya tienes cuenta?"
+            switch_link.text           = "Inicia sesión"
 
         page.update()
 
-    tab_login.on_click = lambda e: set_mode(True)
+    tab_login.on_click    = lambda e: set_mode(True)
     tab_register.on_click = lambda e: set_mode(False)
-    switch_link.on_click = lambda e: set_mode(not state["is_login"])
+    switch_link.on_click  = lambda e: set_mode(not state["is_login"])
 
-    # Estado inicial
     set_mode(True)
 
-    # ---------- Layout ----------
+    # ------------------------------------------------------------------ #
+    #  LAYOUT                                                              #
+    # ------------------------------------------------------------------ #
+
     body = ft.Column(
         controls=[
             header,
