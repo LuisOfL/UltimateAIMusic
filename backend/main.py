@@ -4,6 +4,8 @@ import shutil
 from fastapi import FastAPI, UploadFile, File, Form
 from login import registrar_usuario, iniciar_sesion
 from app import pipeline
+# Importar el módulo de telemetría independiente
+from telemetria import PayloadTelemetria, procesar_e_insertar_metrica
 
 app = FastAPI()
 
@@ -58,3 +60,8 @@ async def run_pipeline(
     return {
         "output_url": url_publica
     }
+
+# ── NUEVO ENDPOINT INDEPENDIENTE PARA TELEMETRÍA ANALÍTICA ────────────────
+@app.post("/api/v1/telemetria")
+async def registrar_telemetria(data: PayloadTelemetria):
+    return procesar_e_insertar_metrica(data)
