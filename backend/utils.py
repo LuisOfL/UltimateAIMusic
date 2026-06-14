@@ -9,7 +9,8 @@ from botocore.exceptions import ClientError
 from TTS.api import TTS
 from pydub import AudioSegment
 from botocore.client import Config
-
+import csv
+import io
 
 def extraer_nombre(path):
     """Extrae el nombre base sin extensión de forma robusta."""
@@ -326,3 +327,37 @@ def genera_url(bucket,key):
         ExpiresIn=3600  # 1 hora
     )
     return url
+
+def agregar_registro_csv_s3(bucket_name, csv_key, nuevo_registro):
+    """
+    Descarga un CSV de S3 (o lo crea si no existe), agrega un registro de 3 columnas
+    y lo vuelve a subir al bucket.
+    """
+    s3_client = boto3.client('s3')
+    
+    # 1. Intentar leer el CSV existente
+    try:
+        response = s3_client.get_object(Bucket=bucket_name, Key=csv_key)
+        contenido_existente = response['Body'].read().decode('utf-8')
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'NoSuchKey':
+            # Si el archivo no existe, creamos los encabezados reflejando las rutas de S3
+            contenido_existente = "ruta_s3,ruta_letra,cognito_id\n"
+        else:
+            raise e  # Si es otro error (ej. permisos), lo lanzamos
+            
+    # 2. Usar StringIO para manejar el texto como un archivo en memoria
+    csv_buffer = io.StringIO(contenido_existente)
+    
+    # 3. Mover el cursor al final para agregar la nueva fila
+    csv_buffer.seek(0, io.SEEK_END)
+    writer = csv.writer(csv_buffer)
+    writer.writerow(nuevo_registro)
+    
+    # 4. Volver a subir el archivo actualizado a S3
+    s3_client.put_object(
+        Bucket=bucket_name, 
+        Key=csv_key, 
+        Body=csv_buffer.getvalue().encode('utf-8'),
+        ContentType="text/csv"
+    )

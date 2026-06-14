@@ -8,13 +8,13 @@ import psycopg2
 # Configuración
 COGNITO_CLIENT = boto3.client('cognito-idp', region_name='us-east-2')
 CLIENT_ID     = '7u2c6fkvotf6enh7hhftsstu1b'
-CLIENT_SECRET = '1lqkfh08csgocf76pn*************ke'
+CLIENT_SECRET = '1lqkfh08csgocf76pnf92u66mdp46ibvmsmiok07dqgdpkcnsike'
 USER_POOL_ID  = 'us-east-2_8yKinp7Md'  
 
 DB_HOST = "seal-users.c180so2u4aci.us-east-2.rds.amazonaws.com"
 DB_NAME = "Users"
 DB_USER = "postgres"
-DB_PASS = "Nome******"
+DB_PASS = "Nomelase123+"
 
 
 def get_secret_hash(username):
@@ -125,7 +125,20 @@ def iniciar_sesion(email, password):
             kwargs['AuthParameters']['SECRET_HASH'] = secret_hash
 
         response = COGNITO_CLIENT.initiate_auth(**kwargs)
-        return response['AuthenticationResult']
+        auth_result = response['AuthenticationResult']
+
+        # NUEVO: Usamos el AccessToken para pedirle a Cognito el perfil del usuario autenticado
+        user_info = COGNITO_CLIENT.get_user(
+            AccessToken=auth_result['AccessToken']
+        )
+        
+        # El 'Username' devuelto por get_user en un User Pool es el UUID/UserSub (cognito_id)
+        cognito_id = user_info['Username']
+
+        # Inyectamos el cognito_id dentro de la respuesta que va al frontend
+        auth_result['cognito_id'] = cognito_id
+        
+        return auth_result
 
     except COGNITO_CLIENT.exceptions.NotAuthorizedException:
         raise HTTPException(status_code=401, detail="Correo o contraseña incorrectos")

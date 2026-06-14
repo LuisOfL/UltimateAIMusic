@@ -28,10 +28,9 @@ async def login(user_data: dict):
 async def run_pipeline(
     pdf: UploadFile = File(...),
     song: UploadFile = File(...),
-    idioma: str = Form("es")
+    idioma: str = Form("es"),
+    cognito_id: str = Form(...)  # Captura de forma correcta la variable enviada por Flet
 ):
-
-
     temp_pdf = f"temp_{uuid.uuid4()}_{pdf.filename}"
     temp_song = f"temp_{uuid.uuid4()}_{song.filename}"
 
@@ -41,14 +40,14 @@ async def run_pipeline(
     with open(temp_song, "wb") as buffer:
         shutil.copyfileobj(song.file, buffer)
 
-
+    # Ejecución de tu script pasándole el identificador de Cognito
     url_publica = pipeline(
         bucket_name="music-project-ia",
         idioma=idioma,
         pdf_local=temp_pdf,
-        song_local=temp_song
+        song_local=temp_song,
+        cognito_id=cognito_id
     )
-
 
     if os.path.exists(temp_pdf):
         os.remove(temp_pdf)
@@ -59,5 +58,3 @@ async def run_pipeline(
     return {
         "output_url": url_publica
     }
-
-
