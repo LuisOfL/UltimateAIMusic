@@ -1,6 +1,8 @@
 import flet as ft
 import boto3
 import re as _re
+import requests
+import threading
 from views.menu.navbar import nav_bar
 from views.menu.topbar import top_bar
 
@@ -8,6 +10,7 @@ from views.menu.topbar import top_bar
 BUCKET_NAME = "music-project-ia"
 PREFIX = "outputs/"
 S3_BASE_URL = f"https://{BUCKET_NAME}.s3.amazonaws.com/"
+FASTAPI_TELEMETRIA_URL = "http://127.0.0.1:8000/api/v1/telemetria"
 
 # Paletas de colores para las tarjetas (estilo Pinterest variado)
 CARD_PALETTES = [
@@ -38,19 +41,18 @@ MUSIC_ICONS = [
 def limpiar_nombre(key: str) -> str:
     """Convierte un key de S3 en nombre legible, eliminando UUIDs y prefijos."""
     nombre = key.replace(PREFIX, "").replace(".mp3", "").replace(".wav", "")
-    # Eliminar UUIDs completos (formato 8-4-4-4-12 hex)
     nombre = _re.sub(
         r'[0-9a-f]{8}[-_]?[0-9a-f]{4}[-_]?[0-9a-f]{4}[-_]?[0-9a-f]{4}[-_]?[0-9a-f]{12}',
         '', nombre, flags=_re.IGNORECASE
     )
-    # Eliminar bloques largos de solo hex (>= 8 chars)
     nombre = _re.sub(r'\b[0-9a-f]{8,}\b', '', nombre, flags=_re.IGNORECASE)
     nombre = nombre.replace("_", " ").replace("-", " ")
     nombre = _re.sub(r'\s+', ' ', nombre).strip()
     return nombre.title() if nombre else "Canción"
 
 
-def home_view(page: ft.Page):
+# ── FIX #3: cognito_id se recibe como parámetro en lugar de buscarse en el scope ──
+def home_view(page: ft.Page, cognito_id: str = "Unknown-User"):
     # ── ESTADOS ──────────────────────────────────────────────────────────────
     is_playing = {"value": False}
     duracion_total = {"ms": 0}
@@ -62,9 +64,10 @@ def home_view(page: ft.Page):
     liked = {"value": False}
     disliked = {"value": False}
 
+    # Acumuladores analíticos de reproducción en la sesión actual
+    tiempo_escuchado_acumulado = {"ms": 0, "ultimo_registro": 0}
+
     # ── AUDIO PLAYER ─────────────────────────────────────────────────────────
-    # IMPORTANTE: En Flet 0.28.x ft.Audio lanza error si no tiene src desde el inicio.
-    # Se usa un src dummy que se reemplaza al seleccionar canción.
     audio_player = ft.Audio(
         src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
         autoplay=False,
@@ -123,7 +126,6 @@ def home_view(page: ft.Page):
         tooltip="No me gusta",
     )
 
-    # Carátula dinámica
     caratula_gradient = ft.LinearGradient(
         begin=ft.alignment.top_left,
         end=ft.alignment.bottom_right,
@@ -144,7 +146,6 @@ def home_view(page: ft.Page):
         content=caratula_icon,
     )
 
-    # Grid
     grid_pinterest = ft.ResponsiveRow(spacing=12, run_spacing=12)
 
     loading_indicator = ft.Container(
@@ -164,12 +165,59 @@ def home_view(page: ft.Page):
         ),
     )
 
-    # ── HELPERS ───────────────────────────────────────────────────────────────
+    # ── FUNCIÓN DE EMISIÓN DE TELEMETRÍA (BACKGROUND THREADING) ────────────────
+    def disparar_analitica_async(tipo_evento, segundos_reproduccion=0.0):
+        """
+        Despacha en un hilo secundario las métricas hacia la API.
+        FIX #3: cognito_id viene del parámetro de home_view, siempre disponible.
+        FIX #2: el nombre de la canción se lee de txt_titulo_detalle, que sí existe.
+        FIX #1: se elimina el segundo hilo duplicado (post_worker) que causaba
+                doble registro y NameError de payload fuera de scope.
+        """
+        # FIX #3: cognito_id es ahora un parámetro real de home_view
+        user_id = str(cognito_id) if cognito_id else "Unknown-User"
+
+        # FIX #2: leer el nombre del control que sí existe en este scope
+        nombre_cancion = txt_titulo_detalle.value or "Unknown-Track"
+
+        # FIX #1: un único hilo con el payload construido dentro de su propio scope
+        def tarea_envio(u_id, c_name):
+            try:
+                payload = {
+                    "id_usuario": u_id,
+                    "id_cancion": c_name,
+                    "tipo_evento": tipo_evento,
+                    "contexto_dispositivo": {
+                        "dispositivo": "Desktop-App",
+                        "sistema_operativo": str(page.platform) if page.platform else "Unknown",
+                        "idioma": "es-MX",
+                        "tipo_conexion": "WiFi-Ethernet"
+                    },
+                    "segundos_escuchados": float(segundos_reproduccion)
+                }
+
+                response = requests.post(
+                    FASTAPI_TELEMETRIA_URL,
+                    json=payload,
+                    timeout=5
+                )
+
+                if response.status_code == 200:
+                    print(f"[Analítica] Evento '{tipo_evento}' de '{c_name}' registrado en RDS.")
+                else:
+                    print(f"[Analítica Error] Servidor respondió {response.status_code}: {response.text}")
+
+            except Exception as ex:
+                print(f"[Analítica Falló] Error en envío de red: {str(ex)}")
+
+        # FIX #1: solo un hilo, no dos
+        threading.Thread(target=tarea_envio, args=(user_id, nombre_cancion), daemon=True).start()
+
+    # ── EVENTOS DE AUDIO CONTROLADOS ──────────────────────────────────────────
     def format_tiempo(ms: int) -> str:
         s = max(0, ms // 1000)
         return f"{s // 60}:{s % 60:02d}"
 
-    # ── EVENTOS DE AUDIO ──────────────────────────────────────────────────────
     def on_duration_changed(e):
         duracion_total["ms"] = int(e.data) if e.data else 0
         slider_progreso.max = max(1, duracion_total["ms"])
@@ -181,6 +229,13 @@ def home_view(page: ft.Page):
         if not is_updating_slider["value"] and duracion_total["ms"] > 0:
             slider_progreso.value = posicion_actual["ms"]
         txt_tiempo_actual.value = format_tiempo(posicion_actual["ms"])
+
+        # Calcular delta de tiempo reproducido si el reproductor está activo
+        if is_playing["value"]:
+            delta = posicion_actual["ms"] - tiempo_escuchado_acumulado["ultimo_registro"]
+            if 0 < delta < 2000:  # Filtrar saltos bruscos manuales en la barra
+                tiempo_escuchado_acumulado["ms"] += delta
+        tiempo_escuchado_acumulado["ultimo_registro"] = posicion_actual["ms"]
         page.update()
 
     def on_state_changed(e):
@@ -190,6 +245,10 @@ def home_view(page: ft.Page):
             slider_progreso.value = 0
             posicion_actual["ms"] = 0
             txt_tiempo_actual.value = "0:00"
+
+            # Al completarse, emitimos la reproducción completa
+            disparar_analitica_async("reproduccion", segundos_reproduccion=tiempo_escuchado_acumulado["ms"] / 1000)
+            tiempo_escuchado_acumulado["ms"] = 0
             page.update()
 
     audio_player.on_duration_changed = on_duration_changed
@@ -205,21 +264,28 @@ def home_view(page: ft.Page):
             audio_player.pause()
             is_playing["value"] = False
             btn_play_icon.name = ft.Icons.PLAY_ARROW_ROUNDED
+
+            # Emitir métrica parcial al pausar
+            if tiempo_escuchado_acumulado["ms"] > 500:
+                disparar_analitica_async("reproduccion", segundos_reproduccion=tiempo_escuchado_acumulado["ms"] / 1000)
+                tiempo_escuchado_acumulado["ms"] = 0
         page.update()
 
     def slider_changed(e):
         is_updating_slider["value"] = True
         audio_player.seek(int(slider_progreso.value))
+        tiempo_escuchado_acumulado["ultimo_registro"] = int(slider_progreso.value)
         is_updating_slider["value"] = False
 
     slider_progreso.on_change_end = slider_changed
 
-    # ── LIKE / DISLIKE ────────────────────────────────────────────────────────
+    # ── CAPTURA DE FEEDBACK (LIKE / DISLIKE) ──────────────────────────────────
     def dar_like(e):
         if not liked["value"]:
             likes_count["value"] += 1
             liked["value"] = True
             btn_like.icon = ft.Icons.THUMB_UP_ROUNDED
+            disparar_analitica_async("like")
             if disliked["value"]:
                 dislikes_count["value"] = max(0, dislikes_count["value"] - 1)
                 disliked["value"] = False
@@ -237,6 +303,7 @@ def home_view(page: ft.Page):
             dislikes_count["value"] += 1
             disliked["value"] = True
             btn_dislike.icon = ft.Icons.THUMB_DOWN_ROUNDED
+            disparar_analitica_async("dislike")
             if liked["value"]:
                 likes_count["value"] = max(0, likes_count["value"] - 1)
                 liked["value"] = False
@@ -252,32 +319,28 @@ def home_view(page: ft.Page):
     btn_like.on_click = dar_like
     btn_dislike.on_click = dar_dislike
 
-    # ── NAVEGACIÓN ────────────────────────────────────────────────────────────
+    # ── GESTIÓN DE NAVEGACIÓN Y CIERRES DE PISTA ──────────────────────────────
     def abrir_detalle_cancion(file_key, palette_idx=0, icon_idx=0):
-        # Detener audio actual
         audio_player.pause()
         is_playing["value"] = False
         btn_play_icon.name = ft.Icons.PLAY_ARROW_ROUNDED
         slider_progreso.value = 0
         duracion_total["ms"] = 0
         posicion_actual["ms"] = 0
+        tiempo_escuchado_acumulado["ms"] = 0
+        tiempo_escuchado_acumulado["ultimo_registro"] = 0
         txt_tiempo_actual.value = "0:00"
         txt_tiempo_total.value = "0:00"
 
-        # Nombre limpio sin UUIDs
         txt_titulo_detalle.value = limpiar_nombre(file_key)
-
-        # Asignar src (reemplaza el dummy)
         url = f"{S3_BASE_URL}{file_key}"
         cancion_actual_src["url"] = url
         audio_player.src = url
 
-        # Actualizar carátula con colores de la tarjeta seleccionada
         paleta = CARD_PALETTES[palette_idx % len(CARD_PALETTES)]
         caratula_gradient.colors = paleta
         caratula_icon.name = MUSIC_ICONS[icon_idx % len(MUSIC_ICONS)]
 
-        # Resetear reacciones
         likes_count["value"] = 0
         dislikes_count["value"] = 0
         liked["value"] = False
@@ -295,6 +358,12 @@ def home_view(page: ft.Page):
         audio_player.pause()
         is_playing["value"] = False
         btn_play_icon.name = ft.Icons.PLAY_ARROW_ROUNDED
+
+        # Despachar métrica acumulada antes de salir del reproductor
+        if tiempo_escuchado_acumulado["ms"] > 500:
+            disparar_analitica_async("reproduccion", segundos_reproduccion=tiempo_escuchado_acumulado["ms"] / 1000)
+
+        tiempo_escuchado_acumulado["ms"] = 0
         contenedor_reproductor.visible = False
         contenedor_feed.visible = True
         page.update()
@@ -302,6 +371,7 @@ def home_view(page: ft.Page):
     def descargar_cancion(e):
         if cancion_actual_src["url"]:
             page.launch_url(cancion_actual_src["url"])
+            disparar_analitica_async("descarga")
 
     # ── CARGA DESDE S3 ────────────────────────────────────────────────────────
     def _mostrar_vacio():
@@ -467,7 +537,7 @@ def home_view(page: ft.Page):
 
     page.run_task(cargar_canciones_s3)
 
-    # ── VISTA FEED ────────────────────────────────────────────────────────────
+    # ── ESTRUCTURA GENERAL DE LOS CONTENEDORES ────────────────────────────────
     contenedor_feed.content = ft.Column(
         spacing=0,
         controls=[
@@ -505,11 +575,9 @@ def home_view(page: ft.Page):
         ],
     )
 
-    # ── VISTA REPRODUCTOR ─────────────────────────────────────────────────────
     contenedor_reproductor.content = ft.Column(
         spacing=0,
         controls=[
-            # Header
             ft.Container(
                 padding=ft.padding.symmetric(horizontal=16, vertical=14),
                 content=ft.Row(
@@ -528,13 +596,11 @@ def home_view(page: ft.Page):
                     ],
                 ),
             ),
-            # Carátula
             ft.Container(
                 alignment=ft.alignment.center,
                 padding=ft.padding.symmetric(vertical=10),
                 content=caratula_container,
             ),
-            # Título y autor
             ft.Container(
                 padding=ft.padding.symmetric(horizontal=28, vertical=12),
                 content=ft.Column(
@@ -553,7 +619,6 @@ def home_view(page: ft.Page):
                     ],
                 ),
             ),
-            # Slider de progreso
             ft.Container(
                 padding=ft.padding.symmetric(horizontal=20, vertical=4),
                 content=ft.Column(
@@ -570,7 +635,6 @@ def home_view(page: ft.Page):
                     ],
                 ),
             ),
-            # Controles
             ft.Container(
                 padding=ft.padding.symmetric(vertical=16),
                 content=ft.Row(
@@ -614,13 +678,11 @@ def home_view(page: ft.Page):
                     ],
                 ),
             ),
-            # Separador
             ft.Container(
                 margin=ft.margin.symmetric(horizontal=24),
                 height=1,
                 bgcolor=ft.Colors.with_opacity(0.08, ft.Colors.WHITE),
             ),
-            # Descarga
             ft.Container(
                 padding=ft.padding.symmetric(horizontal=24, vertical=18),
                 content=ft.ElevatedButton(
@@ -649,7 +711,6 @@ def home_view(page: ft.Page):
         ],
     )
 
-    # ── SCAFFOLD GENERAL ──────────────────────────────────────────────────────
     body = ft.Column(
         spacing=0,
         scroll=ft.ScrollMode.AUTO,
