@@ -3,12 +3,8 @@ import datetime
 import httpx
 
 """
-Vista de inicio de sesión / registro.
-Registro con confirmación automática (sin verificación por correo).
-
-Endpoints:
-  POST /login    {"email", "password"}
-  POST /register {"email","password","username","birthdate","country","state"}
+Vista de inicio de sesión / registro (login_4.py).
+Registro con confirmación automática y login con persistencia de Cognito ID.
 """
 
 API_BASE_URL = "http://127.0.0.1:8000"
@@ -17,10 +13,6 @@ API_BASE_URL = "http://127.0.0.1:8000"
 def login_view(page: ft.Page):
 
     state = {"is_login": True, "loading": False}
-
-    # ------------------------------------------------------------------ #
-    #  HELPERS                                                             #
-    # ------------------------------------------------------------------ #
 
     def show_snack(message, error=False):
         page.open(
@@ -54,10 +46,7 @@ def login_view(page: ft.Page):
             text_size=14,
         )
 
-    # ------------------------------------------------------------------ #
-    #  ENCABEZADO                                                          #
-    # ------------------------------------------------------------------ #
-
+    # ENCABEZADO
     back_btn = ft.Container(
         on_click=lambda e: page.go("/"),
         ink=True,
@@ -105,10 +94,7 @@ def login_view(page: ft.Page):
         text_align=ft.TextAlign.CENTER,
     )
 
-    # ------------------------------------------------------------------ #
-    #  TABS                                                                #
-    # ------------------------------------------------------------------ #
-
+    # TABS SWITCHER
     tab_login = ft.Container(
         expand=True,
         padding=ft.padding.symmetric(vertical=10),
@@ -134,10 +120,7 @@ def login_view(page: ft.Page):
         content=ft.Row(controls=[tab_login, tab_register], spacing=4),
     )
 
-    # ------------------------------------------------------------------ #
-    #  FORMULARIO LOGIN                                                    #
-    # ------------------------------------------------------------------ #
-
+    # FORMULARIO LOGIN
     login_email_field    = styled_field("Correo electrónico", ft.Icons.EMAIL_OUTLINED)
     login_password_field = styled_field("Contraseña", ft.Icons.LOCK_OUTLINE_ROUNDED, password=True)
 
@@ -157,10 +140,7 @@ def login_view(page: ft.Page):
         ],
     )
 
-    # ------------------------------------------------------------------ #
-    #  FORMULARIO REGISTRO                                                 #
-    # ------------------------------------------------------------------ #
-
+    # FORMULARIO REGISTRO
     register_username_field = styled_field("Nombre de usuario", ft.Icons.PERSON_OUTLINE_ROUNDED)
     register_email_field    = styled_field("Correo electrónico", ft.Icons.EMAIL_OUTLINED)
 
@@ -205,7 +185,6 @@ def login_view(page: ft.Page):
     register_password_field = styled_field("Contraseña", ft.Icons.LOCK_OUTLINE_ROUNDED, password=True)
     register_confirm_field  = styled_field("Confirmar contraseña", ft.Icons.LOCK_OUTLINE_ROUNDED, password=True)
 
-    # Info de requisitos de contraseña
     password_hint = ft.Container(
         padding=ft.padding.symmetric(horizontal=4),
         content=ft.Text(
@@ -230,10 +209,7 @@ def login_view(page: ft.Page):
         ],
     )
 
-    # ------------------------------------------------------------------ #
-    #  BOTÓN PRINCIPAL                                                     #
-    # ------------------------------------------------------------------ #
-
+    # BOTÓN PRINCIPAL
     submit_btn_text = ft.Text("Iniciar sesión", color=ft.Colors.WHITE, weight=ft.FontWeight.W_700, size=14)
     submit_spinner  = ft.ProgressRing(width=18, height=18, stroke_width=2, color=ft.Colors.WHITE, visible=False)
 
@@ -259,10 +235,6 @@ def login_view(page: ft.Page):
         ),
     )
 
-    # ------------------------------------------------------------------ #
-    #  TEXTO INFERIOR                                                      #
-    # ------------------------------------------------------------------ #
-
     switch_text = ft.Text("¿No tienes cuenta?", size=12, color=ft.Colors.with_opacity(0.5, ft.Colors.WHITE))
     switch_link = ft.TextButton("Regístrate", style=ft.ButtonStyle(color="#06B6D4"))
 
@@ -272,15 +244,11 @@ def login_view(page: ft.Page):
         controls=[switch_text, switch_link],
     )
 
-    # ------------------------------------------------------------------ #
-    #  LÓGICA DE SUBMIT                                                    #
-    # ------------------------------------------------------------------ #
-
-    async def on_submit(e):
+    # ENVÍO AL BACKEND
+    def on_submit(e):
         if state["loading"]:
             return
 
-        # -- LOGIN --
         if state["is_login"]:
             email    = (login_email_field.value or "").strip()
             password = login_password_field.value or ""
@@ -291,21 +259,30 @@ def login_view(page: ft.Page):
 
             set_loading(True)
             try:
-                async with httpx.AsyncClient(timeout=15) as client:
-                    resp = await client.post(
+                # Usamos httpx normal (síncrono) para evitar lag de hilos en Flet al guardar datos
+                with httpx.Client(timeout=15) as client:
+                    resp = client.post(
                         f"{API_BASE_URL}/login",
                         json={"email": email, "password": password},
                     )
 
                 if resp.status_code == 200:
                     data = resp.json()
-                    try:
-                        page.client_storage.set("access_token",  data.get("AccessToken",  ""))
-                        page.client_storage.set("id_token",      data.get("IdToken",       ""))
-                        page.client_storage.set("refresh_token", data.get("RefreshToken",  ""))
-                    except Exception:
-                        pass
+                    
+                    # Forzar guardado inmediato en el Storage
+                    real_id = data.get("cognito_id")
+                    page.client_storage.set("cognito_id", str(real_id))
+                    page.client_storage.set("access_token", data.get("AccessToken", ""))
+                    
+                    cleaned_user = email.split("@")[0].capitalize()
+                    page.client_storage.set("username", cleaned_user)
+                    page.client_storage.set("email", email)
+                    
+                    page.update()
                     show_snack("Inicio de sesión exitoso")
+                    
+                    # DESTUIR LA PILA VIEJA DE VISTAS MAL RENDERIZADAS
+                    page.views.clear()
                     page.go("/")
                 else:
                     detail = "Correo o contraseña incorrectos"
@@ -315,13 +292,13 @@ def login_view(page: ft.Page):
                         pass
                     show_snack(detail, error=True)
 
-            except httpx.RequestError:
-                show_snack("No se pudo conectar con el servidor", error=True)
+            except Exception as ex:
+                show_snack(f"Error de conexión: {ex}", error=True)
             finally:
                 set_loading(False)
 
-        # -- REGISTRO --
         else:
+            # REGISTRO
             username    = (register_username_field.value or "").strip()
             email       = (register_email_field.value    or "").strip()
             password    = register_password_field.value  or ""
@@ -332,17 +309,14 @@ def login_view(page: ft.Page):
             if not all([username, email, birthdate_iso["value"], country, state_value, password, confirm]):
                 show_snack("Completa todos los campos", error=True)
                 return
-            if "@" not in email or "." not in email:
-                show_snack("Ingresa un correo válido", error=True)
-                return
             if password != confirm:
                 show_snack("Las contraseñas no coinciden", error=True)
                 return
 
             set_loading(True)
             try:
-                async with httpx.AsyncClient(timeout=15) as client:
-                    resp = await client.post(
+                with httpx.Client(timeout=15) as client:
+                    resp = client.post(
                         f"{API_BASE_URL}/register",
                         json={
                             "email":     email,
@@ -360,23 +334,14 @@ def login_view(page: ft.Page):
                     login_email_field.value = email
                     page.update()
                 else:
-                    detail = "No se pudo completar el registro"
-                    try:
-                        detail = resp.json().get("detail", detail)
-                    except Exception:
-                        pass
+                    detail = resp.json().get("detail", "Error al registrar")
                     show_snack(detail, error=True)
-
-            except httpx.RequestError:
-                show_snack("No se pudo conectar con el servidor", error=True)
+            except Exception as ex:
+                show_snack(f"Error de conexión: {ex}", error=True)
             finally:
                 set_loading(False)
 
     submit_btn.on_click = on_submit
-
-    # ------------------------------------------------------------------ #
-    #  CAMBIO DE MODO                                                      #
-    # ------------------------------------------------------------------ #
 
     def set_mode(is_login: bool):
         state["is_login"]      = is_login
@@ -403,7 +368,6 @@ def login_view(page: ft.Page):
             submit_btn_text.value      = "Crear cuenta"
             switch_text.value          = "¿Ya tienes cuenta?"
             switch_link.text           = "Inicia sesión"
-
         page.update()
 
     tab_login.on_click    = lambda e: set_mode(True)
@@ -411,10 +375,6 @@ def login_view(page: ft.Page):
     switch_link.on_click  = lambda e: set_mode(not state["is_login"])
 
     set_mode(True)
-
-    # ------------------------------------------------------------------ #
-    #  LAYOUT                                                              #
-    # ------------------------------------------------------------------ #
 
     body = ft.Column(
         controls=[

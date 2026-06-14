@@ -28,7 +28,7 @@ def option_one_view(page: ft.Page):
                 ft.Icon(ft.Icons.CHECK_CIRCLE_ROUNDED, color="#34D399", size=18),
                 ft.Container(width=8),
                 ft.Text("¡Canción lista! Puedes reproducirla o descargarla.", size=13,
-                         color="#34D399", weight=ft.FontWeight.W_500),
+                        color="#34D399", weight=ft.FontWeight.W_500),
             ]
         ),
     )
@@ -164,7 +164,7 @@ def option_one_view(page: ft.Page):
                 ft.ProgressRing(width=18, height=18, stroke_width=2, color="#7C3AED"),
                 ft.Container(width=12),
                 ft.Text("Procesando… esto puede tardar unos minutos.", size=13,
-                         color=ft.Colors.with_opacity(0.6, ft.Colors.WHITE)),
+                        color=ft.Colors.with_opacity(0.6, ft.Colors.WHITE)),
             ]
         ),
     )
@@ -287,7 +287,13 @@ def option_one_view(page: ft.Page):
         ),
     )
 
-    async def procesar_async(e):
+    # El cognito_id se recibe ahora de manera segura como argumento para evitar el TimeoutError
+    async def procesar_async(e, cognito_id):
+        if not cognito_id:
+            set_error("⚠️ No se detectó ninguna sesión activa. Inicia sesión de nuevo.")
+            page.update()
+            return
+
         for campo, msg in [
             ("pdf_path", "Selecciona un archivo PDF primero."),
             ("mp3_path", "Selecciona un archivo MP3 primero."),
@@ -335,7 +341,10 @@ def option_one_view(page: ft.Page):
                 async with httpx.AsyncClient(timeout=1200) as client:
                     response = await client.post(
                         BACKEND_URL,
-                        data={"idioma": idioma},
+                        data={
+                            "idioma": idioma,
+                            "cognito_id": str(cognito_id)  # Enviado sin problemas
+                        },
                         files={
                             "pdf": (os.path.basename(estado["pdf_path"]), pdf_f, "application/pdf"),
                             "song": (os.path.basename(estado["mp3_path"]), mp3_f, "audio/mpeg"),
@@ -372,7 +381,12 @@ def option_one_view(page: ft.Page):
             btn_procesar.opacity = 1.0
             page.update()
 
-    btn_procesar.on_click = lambda e: page.run_task(procesar_async, e)
+    # Aquí extraemos el ID sincrónicamente antes de lanzar el hilo de run_task
+    btn_procesar.on_click = lambda e: page.run_task(
+        procesar_async, 
+        e, 
+        page.client_storage.get("cognito_id")
+    )
 
     # ── Header ──────────────────────────────────────────────────────────
     header = ft.Container(

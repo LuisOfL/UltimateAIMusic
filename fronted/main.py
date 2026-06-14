@@ -7,21 +7,19 @@ from views.add.option_one import option_one_view
 from views.add.option_two import option_two_view
 from views.add.option_three import option_three_view
 from views.login.login import login_view
+from views.login.profile import profile_view
 import time
 
 
-""" Este archivo es quien maneja la logica de navegacion, contiente las vistas y las direcciones de como
-se ejecutan, este archivo es el que se ejecuta para poder correr el programa
-
-La funcion route_change es quien tiene la logica, primero limpia las vistas y luego te redirige 
-
-"""
-
 def main(page: ft.Page):
+    page.title = "EduSong"
+    page.bgcolor = "#0F0A1A"
 
     def route_change(e):
+        # 1. Limpiamos por completo la caché de vistas previas
         page.views.clear()
 
+        # 2. Re-evaluamos las vistas dinámicamente en cada salto
         if page.route == "/splash_screen":
             page.views.append(splash_view())
             page.update()
@@ -33,6 +31,9 @@ def main(page: ft.Page):
 
         elif page.route == "/add":
             page.views.append(add_view(page))
+
+        elif page.route == "/profile":
+            page.views.append(profile_view(page))
 
         elif page.route == "/login":
             page.views.append(login_view(page))
@@ -53,19 +54,19 @@ def main(page: ft.Page):
             page.views.append(
                 ft.View(
                     route="/404",
-                    controls=[ft.Text("404 - No encontrado")]
+                    controls=[ft.Text("404 - No encontrado", color=ft.Colors.WHITE)]
                 )
             )
-
         page.update()
 
     def view_pop(e):
         page.views.pop()
-        page.go(page.views[-1].route)
+        top_view = page.views[-1]
+        page.go(top_view.route)
 
     page.on_route_change = route_change
     page.on_view_pop = view_pop
-
-    page.go("/splash_screen")  
+    
+    page.go("/splash_screen")
 
 ft.app(target=main)
