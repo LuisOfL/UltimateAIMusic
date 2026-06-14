@@ -8,13 +8,13 @@ import psycopg2
 # Configuración
 COGNITO_CLIENT = boto3.client('cognito-idp', region_name='us-east-2')
 CLIENT_ID     = '7u2c6fkvotf6enh7hhftsstu1b'
-CLIENT_SECRET = '1lqkfh08csgocf76pnf92u66mdp46ibvmsmiok07dqgdpkcnsike'
+CLIENT_SECRET = '1lqkfh08csgocf76pn*************ke'
 USER_POOL_ID  = 'us-east-2_8yKinp7Md'  
 
 DB_HOST = "seal-users.c180so2u4aci.us-east-2.rds.amazonaws.com"
 DB_NAME = "Users"
 DB_USER = "postgres"
-DB_PASS = "Nomelase123+"
+DB_PASS = "Nome******"
 
 
 def get_secret_hash(username):
