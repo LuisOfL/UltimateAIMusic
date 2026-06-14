@@ -7,7 +7,7 @@ from fastapi import HTTPException
 # Configuración
 COGNITO_CLIENT = boto3.client('cognito-idp', region_name='us-east-2')
 CLIENT_ID = '7u2c6fkvotf6enh7hhftsstu1b'
-CLIENT_SECRET = '1lqkfh08csgocf76pnf92u66mdp46ibvmsmiok07dqgdpkcnsike' # Si no tienes, deja esto como None
+CLIENT_SECRET = '1lqkfh08csgocf76pnf92u6***********'
 
 def get_secret_hash(username):
     if not CLIENT_SECRET:
@@ -35,7 +35,6 @@ def registrar_usuario(email, password, username, birthdate, country, state):
             ]
         }
         
-        # Si existe secreto, añadimos el SecretHash
         secret_hash = get_secret_hash(email)
         if secret_hash:
             kwargs['SecretHash'] = secret_hash
