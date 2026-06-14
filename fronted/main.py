@@ -6,6 +6,7 @@ from views.options.config import config_view
 from views.add.option_one import option_one_view
 from views.add.option_two import option_two_view
 from views.add.option_three import option_three_view
+from views.login.login import login_view
 import time
 
 
@@ -32,6 +33,9 @@ def main(page: ft.Page):
 
         elif page.route == "/add":
             page.views.append(add_view(page))
+
+        elif page.route == "/login":
+            page.views.append(login_view(page))
 
         elif page.route == "/config":
             page.views.append(config_view(page))
