@@ -8,7 +8,8 @@ from utils import subir_archivos
 from utils import genera_url
 
 
-def pipeline(bucket_name, idioma, pdf_local, song_local):
+def pipeline(bucket_name, idioma, pdf_local, song_local, cognito_id):
+    res = []
     # 1. Subir originales a S3 (esto te devuelve las rutas de S3)
     rutas_s3 = subir_archivos(pdf_local, song_local)
     pdf_s3_path = rutas_s3[0]
@@ -40,4 +41,8 @@ def pipeline(bucket_name, idioma, pdf_local, song_local):
         language=idioma
     )
     url = genera_url(bucket_name,f"outputs/{song_name}.mp3")
+    res[0] = "outputs/{song_name}.mp3"
+    res[1] = resultado
+    res[2] = cognito_id
+
     return url

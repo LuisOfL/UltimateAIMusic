@@ -3,12 +3,18 @@ import hmac
 import hashlib
 import base64
 from fastapi import HTTPException
+import psycopg2
 
 # Configuración
 COGNITO_CLIENT = boto3.client('cognito-idp', region_name='us-east-2')
 CLIENT_ID     = '7u2c6fkvotf6enh7hhftsstu1b'
-CLIENT_SECRET = '1lqkfh08csgocf76p**********'
+CLIENT_SECRET = '1lqkfh08csgocf76pnf92u66mdp46ibvmsmiok07dqgdpkcnsike'
 USER_POOL_ID  = 'us-east-2_8yKinp7Md'  
+
+DB_HOST = "seal-users.c180so2u4aci.us-east-2.rds.amazonaws.com"
+DB_NAME = "Users"
+DB_USER = "postgres"
+DB_PASS = "Nomelase123+"
 
 
 def get_secret_hash(username):
@@ -25,6 +31,7 @@ def get_secret_hash(username):
 
 def registrar_usuario(email, password, username, birthdate, country, state):
     try:
+        # 1. Registro inicial en Cognito
         kwargs = {
             'ClientId': CLIENT_ID,
             'Username': email,
@@ -41,20 +48,53 @@ def registrar_usuario(email, password, username, birthdate, country, state):
         if secret_hash:
             kwargs['SecretHash'] = secret_hash
 
-        COGNITO_CLIENT.sign_up(**kwargs)
+        # Registrar en Cognito
+        sign_up_res = COGNITO_CLIENT.sign_up(**kwargs)
+        # Obtenemos el UUID único (UserSub) que Cognito le asigna al usuario
+        cognito_id = sign_up_res['UserSub'] 
 
-        # Confirmación automática: no requiere correo ni código
+        # 2. Confirmación automática en Cognito
         COGNITO_CLIENT.admin_confirm_sign_up(
             UserPoolId=USER_POOL_ID,
             Username=email,
         )
 
-        # Marcamos el email como verificado para que pueda iniciar sesión
+        # 3. Forzar verificación de email en Cognito
         COGNITO_CLIENT.admin_update_user_attributes(
             UserPoolId=USER_POOL_ID,
             Username=email,
             UserAttributes=[{'Name': 'email_verified', 'Value': 'true'}],
         )
+
+        print(f"Usuario {email} confirmado exitosamente en Cognito. Iniciando inserción en RDS...")
+
+        # 4. Inserción directa en PostgreSQL (Sincronizado)
+        conn = psycopg2.connect(
+            host=DB_HOST,
+            database=DB_NAME,
+            user=DB_USER,
+            password=DB_PASS,
+            connect_timeout=5
+        )
+        cur = conn.cursor()
+        
+        # Query idéntico a las columnas de tu pgAdmin
+        query = """INSERT INTO usuarios (cognito_id, email, username, birthdate, country, state) 
+                   VALUES (%s, %s, %s, %s, %s, %s);"""
+        
+        cur.execute(query, (
+            cognito_id,  # El UUID real generado por Cognito
+            email, 
+            username, 
+            birthdate, 
+            country, 
+            state
+        ))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        print(f"¡Usuario {email} guardado con éxito en la base de datos Users!")
 
         return {"message": "Usuario registrado exitosamente"}
 
@@ -67,7 +107,7 @@ def registrar_usuario(email, password, username, birthdate, country, state):
         )
     except Exception as e:
         print(f"Error en registro: {type(e).__name__}: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=f"Error en el proceso de registro: {str(e)}")
 
 
 def iniciar_sesion(email, password):
