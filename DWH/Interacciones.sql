@@ -1,0 +1,35 @@
+DROP TABLE IF EXISTS interacciones;
+DROP TABLE IF EXISTS fecha;
+DROP TABLE IF EXISTS dispositivo;
+
+CREATE TABLE fecha (
+    id_fecha BIGINT PRIMARY KEY,
+    fecha DATE NOT NULL,
+    hora TIME NOT NULL,
+    dia INT NOT NULL,
+    mes INT NOT NULL,
+    anio INT NOT NULL
+);
+
+CREATE TABLE dispositivo (
+    id_dispositivo BIGINT PRIMARY KEY,
+    tipo_dispositivo VARCHAR(100),
+    sistema_operativo VARCHAR(100),
+    idioma_dispositivo VARCHAR(50),
+    tipo_conexion VARCHAR(50)
+);
+
+CREATE TABLE interacciones (
+    id_interaccion SERIAL PRIMARY KEY,
+    id_fecha BIGINT,
+    id_dispositivo BIGINT,
+    id_usuario VARCHAR(255) NOT NULL,
+    id_cancion VARCHAR(255) NOT NULL,
+    tipo_evento VARCHAR(50) NOT NULL,
+    tiempo_reproduccion INT DEFAULT 0,
+    dio_like BOOLEAN DEFAULT FALSE,
+    descargada BOOLEAN DEFAULT FALSE,
+    dio_dislike BOOLEAN DEFAULT FALSE,
+    CONSTRAINT fk_interacciones_fecha FOREIGN KEY (id_fecha) REFERENCES fecha(id_fecha) ON DELETE CASCADE,
+    CONSTRAINT fk_interacciones_dispositivo FOREIGN KEY (id_dispositivo) REFERENCES dispositivo(id_dispositivo) ON DELETE CASCADE
+);
