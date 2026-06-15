@@ -95,14 +95,70 @@ La decisión de estructurar el sistema de esta manera responde a necesidades esp
 
 ## PROBLEMAS A RESOLVER:
 
-1. Problema: "Ceguera de Marketing en la Expansión Global"  
-• El problema: La empresa gasta dinero en publicidad para usuarios que no interactúan o abandonan la app en menos de 24 horas.  
-• La solución: El cubo OLAP permite integrar la dimensión dim_ubicacion con los datos de comportamiento. Al realizar un cruce de datos, el sistema identifica qué regiones tienen mayor tasa de retención y cuáles generan usuarios "de paso", permitiendo segmentar las campañas de marketing solo en aquellos países y perfiles que demuestran una alta propensión a la interacción constante.  
+# 1. Resolución de la "Ceguera de Marketing"
 
-2. Problema: "Fuga de Contenido por Desalineación de Gustos (Churn de Contenido)"  
-• El problema: Existe una alta tasa de skips (saltos) en las canciones generadas, y se desconoce si el origen del problema es el género, el tema del PDF o la duración de la pieza.  
-• La solución: Gracias al ETL de canciones, se tienen atributos definidos como tema, género e idioma. Al cruzar estos datos en Hechos_Interacciones con el Skip Rate Implícito, el sistema permite identificar patrones de rechazo. Por ejemplo, si un tema específico tiene un skip rate inusualmente alto, los analistas pueden ajustar los parámetros de la IA para mejorar la relevancia del contenido generado.  
+## Técnica: Regresión Logística (Score de Retención)
 
-3. Problema: "Desconexión entre el 'Aha! Moment' y la Suscripción"  
-• El problema: La falta de visibilidad sobre el momento preciso en que un usuario gratuito está listo para convertirse en Premium causa fricción, ya que se envían ofertas de venta en momentos inoportunos.  
-• La solución: Mediante el análisis de métricas como el Engagement Ratio y la Velocidad de Activación (Time-to-First-Stream), el sistema mapea el comportamiento previo a la suscripción. Al detectar patrones de uso constante y alta interacción (el "Aha! Moment"), el sistema activa el Índice de Propensión Premium, disparando ofertas de suscripción solo cuando el usuario ya ha validado el valor de la plataforma, maximizando la tasa de conversión.
+En lugar de solo mirar el promedio de retención por país, crea un "Score de Probabilidad de Retención" para cada usuario.
+
+**Consultas normales:**  
+Extrae del OLAP métricas históricas de usuarios (país, tipo de dispositivo, día de registro).
+
+**Estadística Avanzada:**  
+Entrena una Regresión Logística donde la variable objetivo ($Y$) sea binaria: 1 si el usuario superó las 24 horas de uso, 0 si no.
+
+**Acción:**  
+El modelo te dará un coeficiente para cada variable (ej: País=MX tiene un peso positivo, Dispositivo=Android_Viejo tiene peso negativo).
+
+**Resultado:**  
+No segmentas por país, segmentas por "Probabilidad de Vida > 24h".  
+Si el score es < 0.3, no gastas ni un centavo en publicidad para ese perfil, redirigiendo el presupuesto a los perfiles con score > 0.7.
+
+---
+
+# 2. Resolución de la "Fuga de Contenido (Churn)"
+
+## Técnica: Análisis de Varianza (ANOVA) y Z-Score
+
+No necesitas IA compleja aquí, necesitas detección de anomalías estadística.
+
+**Consultas normales:**  
+Calcula el Skip Rate promedio global.
+
+**Estadística Avanzada:**  
+Para cada combinación de {Tema, Género}, calcula el Z-Score del Skip Rate.
+
+**Fórmula:**  
+$Z = \frac{(SkipRate_{Actual} - SkipRate_{Promedio})}{\sigma}$  
+(donde $\sigma$ es la desviación estándar).
+
+**Acción:**  
+Define un umbral de alerta (por ejemplo, $|Z| > 2$).  
+Si una combinación específica (ej. "PDF de Matemáticas + Reggaeton") tiene un Z-Score superior a 2, el sistema marca ese segmento como "Críticamente mal alineado".
+
+**Resultado:**  
+Obtienes un reporte automático de "Content Friction Points".  
+Los analistas no tienen que buscar; el sistema les dice exactamente qué par {Tema, Género} es el responsable estadístico de las fugas.
+
+---
+
+# 3. Resolución de la "Desconexión entre Aha! Moment y Suscripción"
+
+## Técnica: Análisis de Supervivencia (Kaplan-Meier)
+
+Este es el nivel más alto de análisis para suscripciones: el "tiempo hasta el evento".
+
+**Consultas normales:**  
+Extrae el tiempo (en días/sesiones) desde el registro hasta la suscripción.
+
+**Estadística Avanzada:**  
+Utiliza el Estimador de Kaplan-Meier. Este modelo no solo te dice quién se suscribe, sino que estima la probabilidad de supervivencia (de no suscribirse) a lo largo del tiempo.
+
+**Acción:**  
+Identifica el "codo" de la curva: el punto exacto donde la pendiente de conversión aumenta drásticamente (el Aha! Moment).
+
+Ejemplo: Si los datos dicen que el 70% de los usuarios que hacen su 5ª interacción en menos de 48 horas se suscriben, ese es tu umbral.
+
+**Resultado:**  
+Creas un Índice de Propensión (Propensity Score) dinámico.  
+Cuando un usuario gratuito alcanza la 4ª interacción y su velocidad de uso es alta, el sistema dispara automáticamente una oferta Premium (el usuario ya está "caliente" para la compra).
