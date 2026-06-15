@@ -139,5 +139,60 @@ Si una combinación específica (ej. "PDF de Matemáticas + Reggaeton") tiene un
 Obtienes un reporte automático de "Content Friction Points".  
 Los analistas no tienen que buscar; el sistema les dice exactamente qué par {Tema, Género} es el responsable estadístico de las fugas.
 
+# 3. Problema: Ruptura Catastrófica de Retención por Dependencia No Lineal en Eventos Extremos
+
+## Técnica: Teorema de Sklar con Cópula de Clayton
+
+Esta técnica permite detectar combinaciones de contenido que provocan caídas simultáneas extremas en el engagement, modelando dependencias no lineales que las correlaciones tradicionales no pueden capturar.
+
+### Consultas normales
+
+Extrae del Cubo OLAP métricas históricas por combinación **{Tema, Género}**, incluyendo:
+
+* Skip Rate
+* Tiempo promedio de sesión
+* Número de reproducciones
+* Tasa de retención
+
+### Estadística Avanzada
+
+Se aplica el Teorema de Sklar para separar las distribuciones marginales de la estructura de dependencia.
+
+1. Se transforman las variables a un espacio uniforme mediante la Transformación Integral de la Probabilidad (PIT):
+
+$$
+U = \hat{F}_X(\text{Skip Rate}), \quad V = \hat{F}_Y(\text{Tiempo Sesión})
+$$
+
+2. Se ajusta una Cópula de Clayton utilizando Máxima Verosimilitud Canónica (CML) para modelar la dependencia en la cola inferior.
+
+3. Se calcula el coeficiente de dependencia de cola inferior ($\lambda_L$) para estimar la probabilidad de colapso simultáneo del engagement.
+
+### Fórmula
+
+**Cópula de Clayton:**
+
+$$
+C_\theta(u, v) = \max \left( u^{-\theta} + v^{-\theta} - 1, , 0 \right)^{-1/\theta}
+$$
+
+**Coeficiente de dependencia de cola inferior:**
+
+$$
+\lambda_L = 2^{-1/\hat{\theta}}
+$$
+
+### Acción
+
+Se define un umbral de riesgo crítico (por ejemplo, $\lambda_L > 0.70$).
+
+Si una combinación específica de contenido (ej. **"Matemáticas + Reggaetón"**) supera dicho umbral, el DSS la clasifica como una combinación de alto riesgo de abandono y reduce automáticamente su exposición dentro del feed de recomendaciones.
+
+### Resultado
+
+El sistema identifica combinaciones de contenido que generan eventos extremos de frustración del usuario antes de que se produzca el churn definitivo.
+
+Los analistas obtienen un mapa de riesgo de dependencias ocultas entre variables de engagement y pueden intervenir preventivamente en las recomendaciones para proteger la retención de usuarios.
+
 ---
 
