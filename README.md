@@ -141,23 +141,3 @@ Los analistas no tienen que buscar; el sistema les dice exactamente qué par {Te
 
 ---
 
-# 3. Resolución de la "Desconexión entre Aha! Moment y Suscripción"
-
-## Técnica: Análisis de Supervivencia (Kaplan-Meier)
-
-Este es el nivel más alto de análisis para suscripciones: el "tiempo hasta el evento".
-
-**Consultas normales:**  
-Extrae el tiempo (en días/sesiones) desde el registro hasta la suscripción.
-
-**Estadística Avanzada:**  
-Utiliza el Estimador de Kaplan-Meier. Este modelo no solo te dice quién se suscribe, sino que estima la probabilidad de supervivencia (de no suscribirse) a lo largo del tiempo.
-
-**Acción:**  
-Identifica el "codo" de la curva: el punto exacto donde la pendiente de conversión aumenta drásticamente (el Aha! Moment).
-
-Ejemplo: Si los datos dicen que el 70% de los usuarios que hacen su 5ª interacción en menos de 48 horas se suscriben, ese es tu umbral.
-
-**Resultado:**  
-Creas un Índice de Propensión (Propensity Score) dinámico.  
-Cuando un usuario gratuito alcanza la 4ª interacción y su velocidad de uso es alta, el sistema dispara automáticamente una oferta Premium (el usuario ya está "caliente" para la compra).
