@@ -323,7 +323,7 @@ if __name__ == "__main__":
 
   
     seed_interacciones(
-        n_total=1_000_000,
+        n_total=6_000_000,
         ids_usuarios=ids_usuarios,
         ids_canciones=ids_canciones,
         ids_fechas=ids_fechas,

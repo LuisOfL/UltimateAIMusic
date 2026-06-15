@@ -15,7 +15,7 @@ DB_PARAMS = {
 conn = psycopg2.connect(**DB_PARAMS)
 cursor = conn.cursor()
 
-print(f"\n📌 Conectado a la base de datos: {DB_PARAMS['database']}\n")
+print(f"\n Conectado a la base de datos: {DB_PARAMS['database']}\n")
 
 cursor.execute("SELECT COUNT(*) FROM interacciones;")
 total = cursor.fetchone()[0]
