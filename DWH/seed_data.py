@@ -118,9 +118,7 @@ DISPOSITIVOS = [
 ]
 CONEXIONES = ["WiFi","4G","5G","3G","Ethernet","LTE"]
 
-# ──────────────────────────────────────────────────────────────────────────────
-# 1. UsersETL → ubicacion + usuario
-# ──────────────────────────────────────────────────────────────────────────────
+
 def seed_usuarios(n_usuarios=100_000):
     print(f"\n[1/4] Generando {n_usuarios:,} usuarios + ubicaciones en UsersETL...")
     t0 = time.time()
@@ -167,12 +165,12 @@ def seed_usuarios(n_usuarios=100_000):
         created = fake.date_time_between(start_date="-5y", end_date="now")
 
         buf_rows.append((
-            str(uuid.uuid4()),          # id_usuario
-            fake.user_name()[:50],      # nombre
+            str(uuid.uuid4()),          
+            fake.user_name()[:50],     
             edad,
             rango,
-            random.choice(MEMBRESIA),   # tipo_membresia
-            created.strftime("%Y-%m-%d %H:%M:%S"),  # created_at
+            random.choice(MEMBRESIA),   
+            created.strftime("%Y-%m-%d %H:%M:%S"),  
             id_ubi,
         ))
 
@@ -190,9 +188,7 @@ def seed_usuarios(n_usuarios=100_000):
 
     print(f"  usuario: {total_ins:,} filas insertadas en {time.time()-t0:.1f}s.")
 
-# ──────────────────────────────────────────────────────────────────────────────
-# 2. CancionETL → cancion
-# ──────────────────────────────────────────────────────────────────────────────
+
 def seed_canciones(n_canciones=50_000, ids_autores=None):
     print(f"\n[2/4] Generando {n_canciones:,} canciones en CancionETL...")
     t0 = time.time()
@@ -207,11 +203,11 @@ def seed_canciones(n_canciones=50_000, ids_autores=None):
 
     for _ in range(n_canciones):
         buf.append((
-            int(rng.integers(60, 600)),         # duracion (segundos)
+            int(rng.integers(60, 600)),         
             random.choice(IDIOMAS_C),
             random.choice(TEMAS),
             random.choice(GENEROS),
-            str(rng.choice(ids_autores)),        # id_autor = un id_usuario real
+            str(rng.choice(ids_autores)),        
         ))
         if len(buf) >= BLOQUE:
             df_b = pd.DataFrame(buf, columns=["duracion","idioma","tema","genero","id_autor"])
@@ -227,9 +223,7 @@ def seed_canciones(n_canciones=50_000, ids_autores=None):
 
     print(f"  cancion: {total:,} filas insertadas en {time.time()-t0:.1f}s.")
 
-# ──────────────────────────────────────────────────────────────────────────────
-# 3. Interacciones → fecha + dispositivo
-# ──────────────────────────────────────────────────────────────────────────────
+
 def seed_fecha_dispositivo():
     print("\n[3/4] Generando fechas y dispositivos en Interacciones...")
 
@@ -239,7 +233,7 @@ def seed_fecha_dispositivo():
         conn.execute(text("TRUNCATE TABLE dispositivo CASCADE;"))
     print("  Tablas limpiadas.")
 
-    # Fechas: todos los días de los últimos 3 años
+
     inicio = date(2022, 1, 1)
     fin    = date(2025, 6, 30)
     fechas = []
@@ -254,7 +248,7 @@ def seed_fecha_dispositivo():
     bulk_insert(df_f, "fecha", URI_INTERACCIONES)
     print(f"  fecha: {len(df_f)} filas.")
 
-    # Dispositivos
+
     disp_rows = []
     for i, (tipo, so, idioma) in enumerate(DISPOSITIVOS, start=1):
         for conexion in CONEXIONES:
@@ -268,9 +262,7 @@ def seed_fecha_dispositivo():
 
     return df_f["id_fecha"].values, df_d["id_dispositivo"].values
 
-# ──────────────────────────────────────────────────────────────────────────────
-# 4. Interacciones → interacciones (10M filas)
-# ──────────────────────────────────────────────────────────────────────────────
+
 def seed_interacciones(n_total=10_000_000, ids_usuarios=None, ids_canciones=None,
                        ids_fechas=None, ids_dispositivos=None):
     print(f"\n[4/4] Generando {n_total:,} interacciones...")
@@ -313,25 +305,25 @@ if __name__ == "__main__":
     print(" SEED DATA — GENERACIÓN DE 10M DE INTERACCIONES")
     print("=" * 60)
 
-    # 1. Usuarios y ubicaciones
+
     seed_usuarios(n_usuarios=100_000)
 
-    # Leer IDs reales de usuarios e IDs de canciones fuente
+
     with engine_usr.connect() as conn:
         ids_usuarios = pd.read_sql(text("SELECT id_usuario FROM usuario;"), con=conn)["id_usuario"].values
 
-    # 2. Canciones (los autores deben ser usuarios reales)
+
     seed_canciones(n_canciones=50_000, ids_autores=ids_usuarios)
 
     with engine_can.connect() as conn:
         ids_canciones = pd.read_sql(text("SELECT id_cancion FROM cancion;"), con=conn)["id_cancion"].values
 
-    # 3. Fechas y dispositivos
+ 
     ids_fechas, ids_dispositivos = seed_fecha_dispositivo()
 
-    # 4. Interacciones
+  
     seed_interacciones(
-        n_total=10_000_000,
+        n_total=1_000_000,
         ids_usuarios=ids_usuarios,
         ids_canciones=ids_canciones,
         ids_fechas=ids_fechas,
