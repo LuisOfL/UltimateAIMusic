@@ -4,7 +4,6 @@ SealMusic es una futura startup de inteligencia artificial que permite crear can
 
 Utiliza modelos de Inteligencia artificial para crear las melodías, tiene diferentes opciones la función principal utiliza principalmente AWS Boto3 (SDK de Amazon Web Services) para interactuar con servicios en la nube como Amazon S3 y AWS Bedrock. S3 se usa como almacenamiento central para archivos PDF, audios, canciones e información procesada, mientras que Bedrock permite ejecutar modelos de lenguaje como Gemma para generar texto a partir de instrucciones estructuradas. Además, se generan URLs presignadas para acceso seguro a los archivos almacenados esta opción funciona con computo distribuido para reducir su latencia.
 
-Aca va una imagen
 
 ---
 
