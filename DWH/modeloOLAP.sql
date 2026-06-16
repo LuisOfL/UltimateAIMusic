@@ -69,9 +69,7 @@ CREATE TABLE dim_escenario (
 );
 
 
--- ───────────────────────────────────────────────────────────────────
--- TABLAS DE HECHOS
--- ───────────────────────────────────────────────────────────────────
+
 
 CREATE TABLE hechos_interacciones (
     id_interaccion      SERIAL,
@@ -151,7 +149,6 @@ CREATE TABLE hechos_data_quality (
 );
 
 
-───────────────────────────────────────────────────────────────
 
 CREATE INDEX idx_dq_fecha ON hechos_data_quality (id_fecha_hora);
 

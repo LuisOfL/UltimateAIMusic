@@ -1,10 +1,3 @@
-"""
-seed_data_fase2.py
-==================
-Genera el SEGUNDO millón de interacciones para el DSS de forma incremental.
-Lee los usuarios y canciones existentes en AWS RDS y añade 1,000,000 de 
-registros con IDs y comportamientos de reproducción diferentes.
-"""
 
 import io
 import time

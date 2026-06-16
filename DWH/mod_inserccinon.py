@@ -62,7 +62,7 @@ def crear_tablas():
         conn.commit()
         cursor.close()
 
-        print("✅ Tablas creadas exitosamente:")
+        print(" Tablas creadas exitosamente:")
         print("   - fecha")
         print("   - dispositivo")
         print("   - interacciones")
@@ -70,7 +70,7 @@ def crear_tablas():
     except Exception as e:
         if conn:
             conn.rollback()
-        print(f"❌ Error: {e}")
+        print(f" Error: {e}")
     finally:
         if conn:
             conn.close()

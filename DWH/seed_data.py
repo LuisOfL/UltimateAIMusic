@@ -1,18 +1,4 @@
-"""
-seed_data.py
-============
-Genera e inserta datos sintéticos en las 3 BDs fuente para que el ETL
-produzca ~10M de filas en hechos_interacciones.
 
-Volúmenes objetivo:
-  UsersETL    → ubicacion: ~500 filas | usuario: ~100 000 filas
-  CancionETL  → cancion:   ~50 000 filas
-  Interacciones → fecha:   ~1 000 filas
-                  dispositivo: ~200 filas
-                  interacciones: ~10 000 000 filas  (en lotes de 500k)
-
-Ejecución estimada: 5-15 minutos dependiendo de la red a AWS RDS.
-"""
 
 import io
 import random

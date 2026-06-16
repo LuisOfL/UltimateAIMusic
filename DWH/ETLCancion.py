@@ -12,7 +12,7 @@ S3_BUCKET_NAME = "music-project-ia"
 AWS_REGION = "us-east-2"
 s3_client = boto3.client("s3", region_name=AWS_REGION)
 
-# Destino: AWS RDS PostgreSQL Data Warehouse
+
 DESTINO_URI = "postgresql://postgres:Nomelase123+@seal-users.c180so2u4aci.us-east-2.rds.amazonaws.com:5432/CancionETL"
 
 print("[INFO] Conectando al Data Warehouse de Destino en AWS RDS...")
@@ -67,27 +67,23 @@ def procesar_cancion_individual(row_data):
     clean_key = str(ruta_letra).strip().lstrip("/")
     
     try:
-        # Descarga rápida directa a memoria RAM
+
         response = s3_client.get_object(Bucket=S3_BUCKET_NAME, Key=clean_key)
         raw_text = response['Body'].read().decode('utf-8')
         
         if not raw_text.strip():
             return None
-            
-        # Minería de Datos: Detección de Idioma
+
         try:
             idioma = detect(raw_text)
         except LangDetectException:
             idioma = "unknown"
             
-        # Análisis Léxico de Sentimientos (Mapeado a Género Analítico)
         genero_sentimiento = analyze_sentiment_as_genre(raw_text)
         
-        # Inferencia del Clasificador ML (Predicción de Tema)
         text_vectorized = vectorizer.transform([raw_text])
         tema_predicho = topic_classifier.predict(text_vectorized)[0]
         
-        # Mapeo limpio estructurado (Sin 'id_cancion' para respetar el SERIAL de la BD)
         return {
             "duracion": int(180 + (idx_simulado * 10)),
             "idioma": str(idioma).strip(),
@@ -121,9 +117,7 @@ def pipeline_nlp_masivo(df_origen):
                 
     return pd.DataFrame(resultados_finales)
 
-# =========================================================================
-# 4. CARGA CONTROLADA A LA BASE DE DATOS DESTINO (LOAD)
-# =========================================================================
+
 def cargar_canciones_to_rds(df_resultado):
     """
     Deposita el DataFrame estructurado en la tabla 'cancion' de RDS PostgreSQL.
@@ -134,13 +128,11 @@ def cargar_canciones_to_rds(df_resultado):
 
     print("\n[Fase L] Iniciando proceso de carga masiva en AWS RDS...")
     
-    # Filtramos y ordenamos las columnas exactas requeridas por la base de datos
     df_cancion_final = df_resultado[['duracion', 'idioma', 'tema', 'genero', 'id_autor']]
     
     try:
         print(f"-> Insertando {len(df_cancion_final)} registros analíticos en la tabla 'cancion'...")
         
-        # Inserción en bloques a alta velocidad libre de comentarios de línea propensos a errores
         df_cancion_final.to_sql(
             name="cancion",
             con=engine_destino,
@@ -157,13 +149,13 @@ def cargar_canciones_to_rds(df_resultado):
 
 
 if __name__ == "__main__":
-    # Fase E: Extracción
+
     URL_CSV = f"https://{S3_BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com/DataLakeCanciones/option_one.csv"
     print(f"[Fase E] Extrayendo catálogo masivo desde: {URL_CSV}")
     df_inicial = pd.read_csv(URL_CSV)
     
-    # Fase T: Transformación
+
     df_canciones_features = pipeline_nlp_masivo(df_inicial)
     
-    # Fase L: Carga
+
     cargar_canciones_to_rds(df_canciones_features)

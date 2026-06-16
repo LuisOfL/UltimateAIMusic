@@ -1,7 +1,4 @@
-"""
-Script de verificación: confirma en qué base de datos están los datos.
-Comando: python verificar_datos.py
-"""
+
 import psycopg2
 
 DB_PARAMS = {

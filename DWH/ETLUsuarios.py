@@ -7,18 +7,14 @@ from rapidfuzz import fuzz, process
 from sqlalchemy import create_engine, text
 import unicodedata
 
-# =========================================================================
-# 1. CONEXIONES
-# =========================================================================
+
 ORIGEN_URI  = "postgresql://postgres:Nomelase123+@seal-users.c180so2u4aci.us-east-2.rds.amazonaws.com:5432/Users"
 DESTINO_URI = "postgresql://postgres:Nomelase123+@seal-users.c180so2u4aci.us-east-2.rds.amazonaws.com:5432/UsersETL"
 
 engine_origen  = create_engine(ORIGEN_URI)
 engine_destino = create_engine(DESTINO_URI)
 
-# =========================================================================
-# 2. EXTRACCIÓN — se incluye created_at para la tabla destino
-# =========================================================================
+
 print("[Fase E] Extrayendo datos desde la base de datos origen...")
 query = text(
     'SELECT cognito_id, email, username, birthdate, country, state, created_at '
@@ -28,9 +24,7 @@ with engine_origen.connect() as conn:
     resultado = conn.execute(query)
     df = pd.DataFrame(resultado.fetchall(), columns=resultado.keys())
 
-# =========================================================================
-# 3. TRANSFORMACIÓN Y LIMPIEZA
-# =========================================================================
+
 print("[Fase T] Limpiando campos y formateando fechas...")
 df["cognito_id"] = df["cognito_id"].str.lower().str.strip()
 df["email"]      = df["email"].str.lower().str.strip()
@@ -41,7 +35,7 @@ df["state"]      = df["state"].str.lower().str.strip()
 
 df["birthdate"]  = pd.to_datetime(df["birthdate"])
 
-# created_at: convertir a timestamp, rellenar nulos con now() como fallback
+
 df["created_at"] = pd.to_datetime(df["created_at"], errors="coerce")
 df["created_at"] = df["created_at"].fillna(pd.Timestamp.now())
 
@@ -64,9 +58,7 @@ df["rango_edad"] = pd.cut(
 
 df["membresia"] = np.random.choice(["normal", "premium"], size=len(df))
 
-# =========================================================================
-# 4. ENRIQUECIMIENTO GEOGRÁFICO (Fuzzy Matching)
-# =========================================================================
+
 def normalizar(texto):
     texto = str(texto).strip().lower()
     return "".join(
@@ -127,13 +119,11 @@ def obtener_continente(pais):
 
 df["continent"] = df["country"].apply(obtener_continente)
 
-# =========================================================================
-# 5. CARGA A LA BD DESTINO (UsersETL)
-# =========================================================================
+
 def cargar_datos_to_rds(df_origen):
     print("[Fase L] Iniciando carga masiva en AWS RDS (UsersETL)...")
 
-    # --- 5.1 UBICACION ---
+
     df_ubi = (
         df_origen[["continent","country","state"]]
         .drop_duplicates()
@@ -147,14 +137,14 @@ def cargar_datos_to_rds(df_origen):
     df_ubi.to_sql("ubicacion", con=engine_destino, if_exists="append",
                   index=False, method="multi", chunksize=500)
 
-    # --- 5.2 SINCRONIZAR IDs ---
+
     print("-> Sincronizando llaves primarias...")
     with engine_destino.connect() as conn:
         df_ubi_db = pd.read_sql(
             text('SELECT id_ubicacion, continente, pais, estado FROM ubicacion;'), con=conn
         )
 
-    # --- 5.3 USUARIO ---
+
     df_map = df_origen.rename(columns={"continent":"continente","country":"pais","state":"estado"})
     df_merged = pd.merge(df_map, df_ubi_db, on=["continente","pais","estado"])
 
