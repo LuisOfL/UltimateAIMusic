@@ -16,10 +16,8 @@ def main(page: ft.Page):
     page.bgcolor = "#0F0A1A"
 
     def route_change(e):
-        # 1. Limpiamos por completo la caché de vistas previas
         page.views.clear()
 
-        # 2. Re-evaluamos las vistas dinámicamente en cada salto
         if page.route == "/splash_screen":
             page.views.append(splash_view())
             page.update()
