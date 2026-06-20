@@ -15,9 +15,9 @@ from sqlalchemy import create_engine, text
 # ──────────────────────────────────────────────────────────────────────────────
 # CONEXIONES
 # ──────────────────────────────────────────────────────────────────────────────
-URI_USUARIOS      = "postgresql://postgres:Nomelase123+@seal-users.c180so2u4aci.us-east-2.rds.amazonaws.com:5432/UsersETL"
-URI_CANCIONES     = "postgresql://postgres:Nomelase123+@seal-users.c180so2u4aci.us-east-2.rds.amazonaws.com:5432/CancionETL"
-URI_INTERACCIONES = "postgresql://postgres:Nomelase123+@seal-users.c180so2u4aci.us-east-2.rds.amazonaws.com:5432/Interacciones"
+URI_USUARIOS      = "postgresql://postgres:*****@seal-users.c180so2u4aci.us-east-2.rds.amazonaws.com:5432/UsersETL"
+URI_CANCIONES     = "postgresql://postgres:*****@seal-users.c180so2u4aci.us-east-2.rds.amazonaws.com:5432/CancionETL"
+URI_INTERACCIONES = "postgresql://postgres:*****@seal-users.c180so2u4aci.us-east-2.rds.amazonaws.com:5432/Interacciones"
 
 engine_usr = create_engine(URI_USUARIOS)
 engine_can = create_engine(URI_CANCIONES)

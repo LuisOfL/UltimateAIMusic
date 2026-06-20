@@ -18,7 +18,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 HOST     = os.environ.get("DB_HOST",     "seal-users.c180so2u4aci.us-east-2.rds.amazonaws.com")
 PORT     = os.environ.get("DB_PORT",     "5432")
 USER     = os.environ.get("DB_USER",     "postgres")
-PASSWORD = os.environ.get("DB_PASSWORD", "Nomelase123+")
+PASSWORD = os.environ.get("DB_PASSWORD", "*******+")
 
 def uri(dbname):
     return f"postgresql://{USER}:{PASSWORD}@{HOST}:{PORT}/{dbname}"

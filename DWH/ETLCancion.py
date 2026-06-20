@@ -13,7 +13,7 @@ AWS_REGION = "us-east-2"
 s3_client = boto3.client("s3", region_name=AWS_REGION)
 
 
-DESTINO_URI = "postgresql://postgres:Nomelase123+@seal-users.c180so2u4aci.us-east-2.rds.amazonaws.com:5432/CancionETL"
+DESTINO_URI = "postgresql://postgres:********@seal-users.c180so2u4aci.us-east-2.rds.amazonaws.com:5432/CancionETL"
 
 print("[INFO] Conectando al Data Warehouse de Destino en AWS RDS...")
 engine_destino = create_engine(DESTINO_URI)

@@ -8,7 +8,7 @@ DB_PARAMS = {
     "host": "seal-users.c180so2u4aci.us-east-2.rds.amazonaws.com",
     "database": "Interacciones",
     "user": "postgres",
-    "password": "Nomelase123+",
+    "password": "*******+",
     "port": "5432"
 }
 

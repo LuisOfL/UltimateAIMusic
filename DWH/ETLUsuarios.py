@@ -8,8 +8,8 @@ from sqlalchemy import create_engine, text
 import unicodedata
 
 
-ORIGEN_URI  = "postgresql://postgres:Nomelase123+@seal-users.c180so2u4aci.us-east-2.rds.amazonaws.com:5432/Users"
-DESTINO_URI = "postgresql://postgres:Nomelase123+@seal-users.c180so2u4aci.us-east-2.rds.amazonaws.com:5432/UsersETL"
+ORIGEN_URI  = "postgresql://postgres:*******@seal-users.c180so2u4aci.us-east-2.rds.amazonaws.com:5432/Users"
+DESTINO_URI = "postgresql://postgres:*******@seal-users.c180so2u4aci.us-east-2.rds.amazonaws.com:5432/UsersETL"
 
 engine_origen  = create_engine(ORIGEN_URI)
 engine_destino = create_engine(DESTINO_URI)

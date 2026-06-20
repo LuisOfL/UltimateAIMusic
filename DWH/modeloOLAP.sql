@@ -79,7 +79,6 @@ CREATE TABLE hechos_interacciones (
     id_cancion          INT          NOT NULL,
     id_ubicacion        INT          NOT NULL,
     id_dispositivo      INT          NOT NULL,
-
     tiempo_reproduccion INT          NOT NULL,
     dio_like            SMALLINT     NOT NULL DEFAULT 0,
     dio_dislike         SMALLINT     NOT NULL DEFAULT 0,
