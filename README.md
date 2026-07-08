@@ -6,4 +6,4 @@ Sistema basado en Machine Learning para detectar transacciones sospechosas.
 
 ## Documentación completa
 
-📄 [Abrir reporte completo](docs/Reporte_Final.pdf)
+📄 [Abrir reporte completo](readme_rss/readme.pdf)
