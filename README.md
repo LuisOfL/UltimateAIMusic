@@ -4,7 +4,7 @@ An artificial intelligence platform that lets people create songs with no musica
 
 ## Full Documentation
 
-[Open full report ➤ ](readme_rss/readme.pdf)    <-
+[Open full report  📄 ](readme_rss/readme.pdf)   
 
 ---
 
