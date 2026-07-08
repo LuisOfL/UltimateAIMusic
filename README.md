@@ -1,181 +1,179 @@
 # SealMusic — AI Music Platform
 
-Plataforma de inteligencia artificial que permite crear canciones sin conocimientos musicales, combinando generación musical con funciones de red social. A partir de **un PDF** (contexto temático) y **una canción de referencia** (estilo), el sistema genera una canción original publicable en la plataforma.
+An artificial intelligence platform that lets people create songs with no musical background, combining music generation with social features. Starting from **a PDF** (topic context) and **a reference song** (style), the system generates an original song ready to publish on the platform.
 
-## Documentación completa
+## Full Documentation
 
-📄 [Abrir reporte completo](readme_rss/readme.pdf)
-
-
+[Open full report ➤ ](readme_rss/readme.pdf)    <-
 
 ---
 
-## 🧠 Backend
+## Backend
 
-El backend está construido en **Python sobre AWS** y se organiza en dos módulos funcionales:
+The backend is built in **Python on AWS** and is organized into two functional modules:
 
-1. **Servicio de Autenticación y Usuarios** (Cognito + RDS)
-2. **Pipeline de Generación de Canciones por IA** (S3 + IA generativa + procesamiento de audio)
+1. **Authentication and User Service** (Cognito + RDS)
+2. **AI Song Generation Pipeline** (S3 + generative AI + audio processing)
 
-Amazon S3 actúa como almacenamiento intermedio entre cada etapa del pipeline, y Amazon RDS (PostgreSQL) como base de datos transaccional (OLTP).
+Amazon S3 acts as intermediate storage between each stage of the pipeline, and Amazon RDS (PostgreSQL) serves as the transactional database (OLTP).
 
-### Servicios de AWS de IA utilizados
+### AWS AI Services Used
 
-| Servicio AWS | Rol en el backend | Dónde se usa |
+| AWS Service | Role in the backend | Where it's used |
 |---|---|---|
-| **AWS Bedrock** (Converse API) | LLM generativo que redacta la letra de la canción | `llamar_qwen()` — genera la letra educativa siguiendo la métrica de la canción de referencia, usando **solo** conceptos extraídos del PDF |
-| **Amazon Cognito** | Identidad, autenticación y emisión de tokens (JWT) | `registrar_usuario()`, `iniciar_sesion()` — sign up, confirmación, login y verificación de usuarios |
-| **Amazon EC2 (Batch Processing)** | Cómputo paralelo para generación de canciones por segmentos y procesamiento de audio pesado (Demucs/Whisper/TTS) | Etapas de separación, transcripción y síntesis del pipeline |
-| **Amazon S3** | Almacenamiento de PDFs, audios originales/procesados y resultados finales | `subir_archivos()`, `genera_url()` y como puente entre cada función del pipeline |
-| **Amazon SageMaker** *(capa analítica)* | Entrenamiento/inferencia de modelos de clasificación (género musical, tema, detección de churn/fraude) | Complementa al pipeline generativo con IA sobre el DWH (ver sección DSS) |
-| **Amazon Redshift ML** *(capa analítica)* | Predicciones vía SQL sobre el Data Warehouse (ej. propensión a Premium, anomalías de consumo de API) | No forma parte del pipeline en tiempo real, pero consume su output histórico |
+| **AWS Bedrock** (Converse API) | Generative LLM that writes the song lyrics | `llamar_qwen()` — generates the educational lyrics following the meter of the reference song, using **only** concepts extracted from the PDF |
+| **Amazon Cognito** | Identity, authentication, and token (JWT) issuance | `registrar_usuario()`, `iniciar_sesion()` — sign up, confirmation, login, and user verification |
+| **Amazon EC2 (Batch Processing)** | Parallel compute for segmented song generation and heavy audio processing (Demucs/Whisper/TTS) | Separation, transcription, and synthesis stages of the pipeline |
+| **Amazon S3** | Storage for PDFs, original/processed audio, and final results | `subir_archivos()`, `genera_url()`, and as the bridge between each pipeline function |
+| **Amazon SageMaker** *(analytics layer)* | Training/inference for classification models (music genre, topic, churn/fraud detection) | Complements the generative pipeline with AI over the DWH (see DSS section) |
+| **Amazon Redshift ML** *(analytics layer)* | SQL-based predictions over the Data Warehouse (e.g., Premium propensity, API consumption anomalies) | Not part of the real-time pipeline, but consumes its historical output |
 
-> El uso de **AWS Bedrock** es el corazón de la IA generativa del producto: convierte el texto plano de un PDF académico en una letra de canción coherente con la estructura rítmica de una canción de referencia, sin salirse del contenido fuente (mitigación de alucinaciones vía prompt restrictivo).
+> **AWS Bedrock** is the heart of the product's generative AI: it turns the plain text of an academic PDF into song lyrics that follow the rhythmic structure of a reference song, without straying from the source content (hallucination mitigation via a restrictive prompt).
 
-### Pipeline de Generación de Canciones
+### Song Generation Pipeline
 
-Flujo completo, de principio a fin:
+Full end-to-end flow:
 
 ```
-Usuario sube PDF + canción de referencia
+User uploads PDF + reference song
         │
         ▼
-1. subir_archivos()              → Sube PDF y canción a S3
-2. extraer_texto_pdf_s3()        → Extrae texto del PDF (pdfplumber)
-3. separar_y_subir_audio()       → Separa voz/instrumental (Demucs) y sube a S3
-4. transcribir_audio_s3()        → Transcribe la voz con timestamps (Whisper)
-5. llamar_qwen()                 → 🧠 AWS Bedrock genera la letra educativa
-6. generar_y_mezclar_tts_s3()    → Clona la voz (XTTS v2) y mezcla sobre el instrumental
-7. genera_url()                  → URL prefirmada de S3 (1h) con el resultado
-8. agregar_registro_csv_s3()     → Registra la canción en el CSV de control
+1. subir_archivos()              → Uploads PDF and song to S3
+2. extraer_texto_pdf_s3()        → Extracts text from the PDF (pdfplumber)
+3. separar_y_subir_audio()       → Separates vocals/instrumental (Demucs) and uploads to S3
+4. transcribir_audio_s3()        → Transcribes the vocals with timestamps (Whisper)
+5. llamar_qwen()                 → AWS Bedrock generates the educational lyrics
+6. generar_y_mezclar_tts_s3()    → Clones the voice (XTTS v2) and mixes it over the instrumental
+7. genera_url()                  → Presigned S3 URL (1h) with the result
+8. agregar_registro_csv_s3()     → Logs the song in the control CSV
 ```
 
-#### Funciones principales
+#### Core Functions
 
-| Función | Propósito | Tecnología |
+| Function | Purpose | Technology |
 |---|---|---|
-| `extraer_texto_pdf_s3(bucket, key)` | Descarga un PDF de S3 y concatena el texto de todas sus páginas | pdfplumber, boto3 (S3) |
-| `separar_y_subir_audio(archivo, bucket, prefix)` | Separa la canción de referencia en voz e instrumental y sube los MP3 a S3 | Demucs (`--two-stems=vocals`), ffmpeg |
-| `transcribir_audio_s3(bucket, key, model, lang)` | Transcribe el audio y devuelve texto + segmentos con marcas de tiempo | OpenAI Whisper |
-| `llamar_qwen(texto_pdf, letra_original, num_lines, idioma)` | Genera la letra educativa a partir del PDF, respetando la métrica original | **AWS Bedrock (Converse API)** |
-| `generar_y_mezclar_tts_s3(...)` | Sintetiza cada línea con la voz de referencia clonada y la mezcla sobre el instrumental | Coqui TTS (XTTS v2), pydub |
-| `subir_archivos(path1, path2)` | Sube PDF y canción de referencia originales a S3 | boto3 (S3) |
-| `genera_url(bucket, key)` | Genera una URL prefirmada de S3 (1h) para entregar el resultado | boto3 (S3, SigV4) |
-| `agregar_registro_csv_s3(bucket, csv_key, registro)` | Agrega una fila de control (ruta canción, letra, cognito_id) a un CSV en S3 | boto3 (S3), módulo `csv` |
+| `extraer_texto_pdf_s3(bucket, key)` | Downloads a PDF from S3 and concatenates the text of all its pages | pdfplumber, boto3 (S3) |
+| `separar_y_subir_audio(archivo, bucket, prefix)` | Separates the reference song into vocal and instrumental tracks and uploads the resulting MP3s to S3 | Demucs (`--two-stems=vocals`), ffmpeg |
+| `transcribir_audio_s3(bucket, key, model, lang)` | Downloads an audio file from S3 and transcribes it, returning full text plus timestamped segments | OpenAI Whisper |
+| `llamar_qwen(texto_pdf, letra_original, num_lines, idioma)` | Generates the educational lyrics from the PDF, preserving the original meter | **AWS Bedrock (Converse API)** |
+| `generar_y_mezclar_tts_s3(...)` | Synthesizes each line with the cloned reference voice and overlays it onto the instrumental at Whisper's timestamps | Coqui TTS (XTTS v2), pydub |
+| `subir_archivos(path1, path2)` | Uploads the original PDF and reference song to S3 | boto3 (S3) |
+| `genera_url(bucket, key)` | Generates a presigned S3 URL (1h) to deliver the result | boto3 (S3, SigV4) |
+| `agregar_registro_csv_s3(bucket, csv_key, registro)` | Appends a control row (song path, lyrics path, cognito_id) to a CSV in S3 | boto3 (S3), `csv` module |
 
-### Servicio de Autenticación y Usuarios (Cognito + RDS)
+### Authentication and User Service (Cognito + RDS)
 
-Orquesta el ciclo completo de registro y login, sincronizando **Amazon Cognito** (identidad) con **Amazon RDS PostgreSQL** (perfil transaccional):
+Orchestrates the full registration and login cycle, syncing **Amazon Cognito** (identity) with **Amazon RDS PostgreSQL** (transactional profile):
 
-| Paso | Acción | Servicio AWS |
+| Step | Action | AWS Service |
 |---|---|---|
-| 1 | `sign_up()` con email, password, username, birthdate, country, state | Amazon Cognito |
-| 2 | `admin_confirm_sign_up()` confirma la cuenta automáticamente | Amazon Cognito |
-| 3 | `admin_update_user_attributes()` marca `email_verified = true` | Amazon Cognito |
-| 4 | `INSERT` en la tabla `usuarios` con el `UserSub` (cognito_id) sincronizado | Amazon RDS (PostgreSQL) |
+| 1 | `sign_up()` with email, password, username, birthdate, country, state | Amazon Cognito |
+| 2 | `admin_confirm_sign_up()` confirms the account automatically | Amazon Cognito |
+| 3 | `admin_update_user_attributes()` sets `email_verified = true` | Amazon Cognito |
+| 4 | `INSERT` into the `usuarios` table with the synced `UserSub` (cognito_id) | Amazon RDS (PostgreSQL) |
 
-| Función | Propósito |
+| Function | Purpose |
 |---|---|
-| `get_secret_hash(username)` | Calcula el HMAC-SHA256 exigido por Cognito para clientes con secret configurado |
-| `registrar_usuario(...)` | Orquesta el alta completa: Cognito `sign_up` + confirmación + verificación + `INSERT` en RDS |
-| `iniciar_sesion(email, password)` | Autentica contra Cognito (`USER_PASSWORD_AUTH`) y recupera el `cognito_id` |
+| `get_secret_hash(username)` | Computes the HMAC-SHA256 required by Cognito for clients with a configured secret |
+| `registrar_usuario(...)` | Orchestrates the full sign-up: Cognito `sign_up` + confirmation + verification + `INSERT` into RDS |
+| `iniciar_sesion(email, password)` | Authenticates against Cognito (`USER_PASSWORD_AUTH`) and retrieves the `cognito_id` |
 
-**Manejo de errores:**
-- `UsernameExistsException` → HTTP 400, correo ya registrado.
-- `InvalidPasswordException` → HTTP 400, política de contraseña no cumplida.
-- `NotAuthorizedException` / `UserNotFoundException` en login → HTTP 401 con mensaje genérico (evita enumeración de usuarios).
+**Error handling:**
+- `UsernameExistsException` → HTTP 400, email already registered.
+- `InvalidPasswordException` → HTTP 400, Cognito password policy not met.
+- `NotAuthorizedException` / `UserNotFoundException` on login → HTTP 401 with a generic message (prevents user enumeration).
 
-### Stack tecnológico del backend
+### Backend Technology Stack
 
-| Categoría | Librería / Servicio | Uso |
+| Category | Library / Service | Use |
 |---|---|---|
-| Almacenamiento | boto3 (S3) | Descarga/subida de PDFs, audios y resultados; URLs prefirmadas |
-| Identidad | boto3 (Cognito) | Registro, confirmación y autenticación de usuarios |
-| Base de datos | psycopg2 | Inserción directa del perfil de usuario en PostgreSQL (RDS) |
-| Extracción de texto | pdfplumber | Lectura de texto plano por página del PDF de contexto |
-| Separación de audio | Demucs + ffmpeg | Separación de voz/instrumental y conversión WAV → MP3 |
-| Transcripción | OpenAI Whisper | Transcripción con segmentos y timestamps |
-| **Generación de letra (IA)** | **AWS Bedrock (Converse API)** | LLM que redacta la letra educativa a partir del PDF |
-| Síntesis de voz | Coqui TTS (XTTS v2) | Clonación de voz multilingüe línea por línea |
-| Mezcla de audio | pydub | Overlay de las líneas generadas sobre el instrumental |
-| API / Web | FastAPI | Manejo de excepciones HTTP del servicio de autenticación |
+| Storage | boto3 (S3) | Download/upload of PDFs, audio, and results; presigned URLs |
+| Identity | boto3 (Cognito) | User registration, confirmation, and authentication |
+| Database | psycopg2 | Direct insertion of the user profile into PostgreSQL (RDS) |
+| Text extraction | pdfplumber | Plain-text extraction per page from the context PDF |
+| Audio separation | Demucs + ffmpeg | Vocal/instrumental separation and WAV → MP3 conversion |
+| Transcription | OpenAI Whisper | Transcription with timestamped segments |
+| **Lyrics generation (AI)** | **AWS Bedrock (Converse API)** | LLM that writes the educational lyrics from the PDF |
+| Voice synthesis | Coqui TTS (XTTS v2) | Multilingual voice cloning, line by line |
+| Audio mixing | pydub | Overlaying generated lines onto the instrumental |
+| API / Web | FastAPI | HTTP exception handling for the authentication service |
 
-### Seguridad del código
+### Code Security
 
-- Las consultas a PostgreSQL usan **parámetros preparados** (`cur.execute` con placeholders `%s`), previniendo inyección SQL.
-- Los mensajes de error de login son **genéricos**, evitando revelar si el correo existe.
-- ⚠️ **Riesgo detectado:** `CLIENT_SECRET` de Cognito y las credenciales de RDS (`DB_USER`, `DB_PASS`) están escritos directamente en el código. Se recomienda moverlos a **AWS Secrets Manager** o variables de entorno inyectadas por el entorno de ejecución (Lambda/EC2).
-- Los archivos temporales (PDFs, audios) se procesan dentro de `tempfile.TemporaryDirectory()`, que se elimina automáticamente al finalizar cada función.
+- PostgreSQL queries use **prepared parameters** (`cur.execute` with `%s` placeholders), preventing SQL injection.
+- Login error messages are **generic**, avoiding disclosure of whether an email exists.
+- **Risk identified:** the Cognito `CLIENT_SECRET` and RDS credentials (`DB_USER`, `DB_PASS`) are hardcoded directly in the source code. It is recommended to move them to **AWS Secrets Manager** or environment variables injected by the runtime environment (Lambda/EC2).
+- Temporary files (PDFs, audio) are processed inside `tempfile.TemporaryDirectory()`, which is automatically deleted once each function completes.
 
 ---
 
-## 🏗️ Arquitectura de Datos
+## Data Architecture
 
-SealMusic sigue un paradigma de **Datos en Movimiento** bajo un modelo de **Microservicios con Base de Datos por Servicio** (Database-per-Service), separando lectura de escritura (CQRS):
+SealMusic follows a **Data-in-Motion** paradigm under a **Microservices with Database-per-Service** model, separating reads from writes (CQRS):
 
 ```
-Crear Canción    → OLTP (crear canción)   → ETL → BD Canción
-Crear Cuenta     → OLTP (crear cuenta)    → ETL → BD Usuarios
-Interactuar      → OLTP (interacción)     → ETL → BD Interacciones
+Create Song      → OLTP (create song)      → ETL → Song DB
+Create Account   → OLTP (create account)   → ETL → Users DB
+Interact         → OLTP (interaction)      → ETL → Interactions DB
                                                         │
                                                         ▼
-                              BD Canción/Usuarios (Staging) → ETL Final → Cubo OLAP → BD Grafos (Recomendaciones)
+                              Song/Users DB (Staging) → Final ETL → OLAP Cube → Graph DB (Recommendations)
 ```
 
-### Componentes principales
+### Core Components
 
-| Componente | Base de Datos | Tipo | Propósito |
+| Component | Database | Type | Purpose |
 |---|---|---|---|
-| Crear Canción | BD Canción (RDS) | OLTP | Metadatos y archivos de audio |
-| Crear Cuenta | BD Usuarios (RDS) | OLTP | Identidad y perfil de usuario |
-| Interactuar | BD Interacciones (RDS) | OLTP | Telemetría en tiempo real |
-| Análisis | Cubo de Datos Final | OLAP | Data Warehouse analítico (Redshift) |
-| Recomendaciones | BD Grafo | Grafo | Motor de recomendaciones |
+| Create Song | Song DB (RDS) | OLTP | Metadata and audio files |
+| Create Account | Users DB (RDS) | OLTP | User identity and profile |
+| Interact | Interactions DB (RDS) | OLTP | Real-time telemetry |
+| Analysis | Final Data Cube | OLAP | Analytical Data Warehouse (Redshift) |
+| Recommendations | Graph DB | Graph | Recommendation engine |
 
-### ETL destacado
+### Notable ETL Techniques
 
-- **Fuzzy Matching (RapidFuzz)**: normaliza variaciones ortográficas de país/estado (ej. "Mejico", "mexica" → México).
-- **TF-IDF + Logistic Regression/SVM**: clasifica el género musical a partir de la letra generada.
-- **Cópula de Gumbel**: modela dependencias no lineales entre calidad del modelo IA, retención de usuarios y costo de infraestructura en simulaciones DSS.
+- **Fuzzy Matching (RapidFuzz)**: normalizes spelling variations of country/state (e.g., "Mejico", "mexica" → Mexico).
+- **TF-IDF + Logistic Regression/SVM**: classifies the music genre from the generated lyrics.
+- **Gumbel Copula**: models nonlinear dependencies between AI model quality, user retention, and infrastructure cost in DSS simulations.
 
-### Rendimiento del ETL hacia el Cubo OLAP
+### ETL Performance to the OLAP Cube
 
-| Volumen de datos | Tiempo en AWS | Observación |
+| Data Volume | Time on AWS | Observation |
 |---|---|---|
-| 500,000 registros | 12 seg | Óptimo para pruebas |
-| 12,000,000 registros | 6 min 40 seg | AWS optimiza con columnar storage |
-| 200,000,000 registros | 2 horas | Batch nocturno recomendado |
+| 500,000 records | 12 sec | Optimal for testing |
+| 12,000,000 records | 6 min 40 sec | AWS optimizes with columnar storage |
+| 200,000,000 records | 2 hours | Overnight batch recommended |
 
 ---
 
-## 🔒 Seguridad y Escalabilidad de la Plataforma
+## Platform Security and Scalability
 
-| Capa | Servicio AWS | Protección |
+| Layer | AWS Service | Protection |
 |---|---|---|
-| Identidad y autenticación | Amazon Cognito | MFA, OAuth2, tokens JWT firmados |
-| Cifrado en tránsito | TLS 1.3 | Todas las conexiones API y BD cifradas |
-| Cifrado en reposo | AWS KMS | Buckets S3 y bases de datos RDS cifradas |
-| Control de acceso | IAM Roles | Principio de mínimo privilegio por servicio |
-| Protección DDoS | AWS Shield + WAF | Bloqueo automático de ataques volumétricos |
-| Monitoreo y auditoría | AWS CloudTrail | Log inmutable de todas las operaciones |
+| Identity and authentication | Amazon Cognito | MFA, OAuth2, signed JWT tokens |
+| Encryption in transit | TLS 1.3 | All API and DB connections encrypted |
+| Encryption at rest | AWS KMS | Encrypted S3 buckets and RDS databases |
+| Access control | IAM Roles | Least-privilege principle per service |
+| DDoS protection | AWS Shield + WAF | Automatic blocking of volumetric attacks |
+| Monitoring and auditing | AWS CloudTrail | Immutable log of all operations |
 
-- **Cubo OLAP (Redshift):** soporta +500 millones de registros con almacenamiento columnar distribuido.
-- **Réplicas de lectura:** absorben tráfico del frontend y del ETL sin afectar al RDS primario.
+- **OLAP Cube (Redshift):** supports 500+ million records with distributed columnar storage.
+- **Read replicas:** absorb frontend and ETL traffic without impacting the primary RDS instance.
 
 ---
 
-## 📌 Resumen
+## Summary
 
-| Componente | Problema que resuelve | Impacto medible |
+| Component | Problem it Solves | Measurable Impact |
 |---|---|---|
-| Microservicios + OLTP | Fallo aislado por dominio | 99.9% disponibilidad por servicio |
-| **AWS Bedrock (LLM)** | Generación de letras sin conocimiento musical del usuario | Letra educativa fiel al PDF fuente |
-| ETL con Fuzzy Matching | Datos sucios de ubicación | Estandarización automática de 190+ países |
-| Clasificador TF-IDF + SVM | Metadatos de canciones sin etiquetar | Clasificación automática de género/tema |
-| Cubo OLAP (Redshift) | Reportes lentos sobre transaccional | De 56 min → 6:40 min para 12M registros |
-| BD de Grafos | Recomendaciones genéricas | Personalización en tiempo real |
-| SageMaker + Redshift ML | IA solo en notebooks aislados | ML directamente en SQL sobre 500M+ datos |
+| Microservices + OLTP | Isolated failure per domain | 99.9% availability per service |
+| **AWS Bedrock (LLM)** | Lyrics generation without musical knowledge from the user | Educational lyrics faithful to the source PDF |
+| ETL with Fuzzy Matching | Dirty location data | Automatic standardization of 190+ countries |
+| TF-IDF + SVM Classifier | Unlabeled song metadata | Automatic genre/topic classification |
+| OLAP Cube (Redshift) | Slow reporting over transactional data | From 56 min to 6:40 min for 12M records |
+| Graph DB | Generic recommendations | Real-time personalization |
+| SageMaker + Redshift ML | AI confined to isolated notebooks | ML directly in SQL over 500M+ records |
 
 ---
 
-*SealMusic — Propuesta Expoescom · LuisMData*
+*SealMusic —· LuisMData*
