@@ -4,7 +4,6 @@ import shutil
 from fastapi import FastAPI, UploadFile, File, Form
 from login import registrar_usuario, iniciar_sesion
 from app import pipeline
-# Importar el módulo de telemetría independiente
 from telemetria import PayloadTelemetria, procesar_e_insertar_metrica
 
 app = FastAPI()
@@ -31,7 +30,7 @@ async def run_pipeline(
     pdf: UploadFile = File(...),
     song: UploadFile = File(...),
     idioma: str = Form("es"),
-    cognito_id: str = Form(...)  # Captura de forma correcta la variable enviada por Flet
+    cognito_id: str = Form(...)  
 ):
     temp_pdf = f"temp_{uuid.uuid4()}_{pdf.filename}"
     temp_song = f"temp_{uuid.uuid4()}_{song.filename}"
@@ -42,7 +41,6 @@ async def run_pipeline(
     with open(temp_song, "wb") as buffer:
         shutil.copyfileobj(song.file, buffer)
 
-    # Ejecución de tu script pasándole el identificador de Cognito
     url_publica = pipeline(
         bucket_name="music-project-ia",
         idioma=idioma,
@@ -61,7 +59,6 @@ async def run_pipeline(
         "output_url": url_publica
     }
 
-# ── NUEVO ENDPOINT INDEPENDIENTE PARA TELEMETRÍA ANALÍTICA ────────────────
 @app.post("/api/v1/telemetria")
 async def registrar_telemetria(data: PayloadTelemetria):
     return procesar_e_insertar_metrica(data)
