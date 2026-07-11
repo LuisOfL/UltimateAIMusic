@@ -152,9 +152,7 @@ Interact         → OLTP (interaction)      → ETL → Interactions DB
 |---|---|---|
 | Identity and authentication | Amazon Cognito | MFA, OAuth2, signed JWT tokens |
 | Encryption in transit | TLS 1.3 | All API and DB connections encrypted |
-| Encryption at rest | AWS KMS | Encrypted S3 buckets and RDS databases |
 | Access control | IAM Roles | Least-privilege principle per service |
-| DDoS protection | AWS Shield + WAF | Automatic blocking of volumetric attacks |
 | Monitoring and auditing | AWS CloudTrail | Immutable log of all operations |
 
 - **OLAP Cube (Redshift):** supports 500+ million records with distributed columnar storage.
@@ -172,7 +170,6 @@ Interact         → OLTP (interaction)      → ETL → Interactions DB
 | TF-IDF + SVM Classifier | Unlabeled song metadata | Automatic genre/topic classification |
 | OLAP Cube (Redshift) | Slow reporting over transactional data | From 56 min to 6:40 min for 12M records |
 | Graph DB | Generic recommendations | Real-time personalization |
-| SageMaker + Redshift ML | AI confined to isolated notebooks | ML directly in SQL over 500M+ records |
 
 ---
 
